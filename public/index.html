@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lista de tareas</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>Gestor de tareas</h1>
+      <p>Controla, edita y completa tus pendientes diarios.</p>
+    </header>
+
+    <main class="app-content">
+      <section class="card">
+        <h2>Crear nueva tarea</h2>
+        <form id="task-form" aria-label="Formulario de creación de tareas">
+          <label class="visually-hidden" for="task-title">Descripción de la tarea</label>
+          <div class="form-row">
+            <input
+              id="task-title"
+              name="title"
+              type="text"
+              placeholder="Ej. Comprar ingredientes para la cena"
+              autocomplete="off"
+              required
+            />
+            <button type="submit" class="btn primary">Añadir</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2>Tareas</h2>
+          <div class="filters" role="group" aria-label="Mostrar">
+            <button type="button" class="btn filter-btn active" data-filter="all">Todas</button>
+            <button type="button" class="btn filter-btn" data-filter="pending">Pendientes</button>
+            <button type="button" class="btn filter-btn" data-filter="completed">Completadas</button>
+          </div>
+        </div>
+        <ul id="task-list" class="task-list" aria-live="polite"></ul>
+        <p id="empty-state" class="empty-state" hidden>No hay tareas registradas. ¡Crea la primera!</p>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <small>Los cambios se guardan automáticamente en tu dispositivo.</small>
+    </footer>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
