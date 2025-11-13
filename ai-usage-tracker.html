@@ -44,6 +44,17 @@
             font-size: 1.1em;
         }
 
+        .session-indicator {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
         .dashboard {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -304,6 +315,16 @@
             color: #333;
         }
 
+        .session-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 5px;
+            font-size: 0.8em;
+            margin-left: 5px;
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 1.8em;
@@ -355,13 +376,14 @@
         <header>
             <h1>AI Usage Tracker</h1>
             <p class="subtitle">Monitor de Consumo de Modelo IA - 8h/día (4.1€/día, 0.5€/h)</p>
+            <div class="session-indicator" id="sessionIndicator">Sesión 1 de 2</div>
         </header>
 
         <div id="alertContainer"></div>
 
         <div class="dashboard">
             <div class="stat-card">
-                <h3>Uso Total (5h)</h3>
+                <h3>Uso Sesión Actual (5h)</h3>
                 <div class="stat-value" id="totalUsage">0.00%</div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressBar" style="width: 0%">0%</div>
@@ -377,19 +399,19 @@
             <div class="stat-card">
                 <h3>Coste Medio/Prompt</h3>
                 <div class="stat-value" id="avgCostPerPrompt">0.000€</div>
-                <div class="stat-label">promedio</div>
+                <div class="stat-label">todas las sesiones</div>
             </div>
 
             <div class="stat-card">
-                <h3>Total Prompts</h3>
+                <h3>Total Prompts Hoy</h3>
                 <div class="stat-value" id="totalPrompts">0</div>
-                <div class="stat-label">hoy</div>
+                <div class="stat-label">todas las sesiones</div>
             </div>
 
             <div class="stat-card">
                 <h3>Uso Medio/Prompt</h3>
                 <div class="stat-value" id="avgPerPrompt">0.00%</div>
-                <div class="stat-label">promedio</div>
+                <div class="stat-label">sesión actual</div>
             </div>
 
             <div class="stat-card">
@@ -422,14 +444,14 @@
                 </div>
                 <div class="btn-group">
                     <button type="submit" class="btn-primary">Registrar Prompt</button>
-                    <button type="button" class="btn-secondary" onclick="resetSession()">Reiniciar Sesión</button>
+                    <button type="button" class="btn-secondary" onclick="resetSession()">Nueva Sesión (5h)</button>
                     <button type="button" class="btn-danger" onclick="endDay()">Acabar el Día</button>
                 </div>
             </form>
         </div>
 
         <div class="history-section">
-            <h2>Histórico de Prompts - Hoy</h2>
+            <h2>Histórico de Prompts - Sesión Actual</h2>
             <div style="overflow-x: auto;">
                 <table class="history-table" id="historyTable">
                     <thead>
@@ -446,7 +468,7 @@
                         <tr>
                             <td colspan="6" class="empty-state">
                                 <div>
-                                    <p style="font-size: 1.2em;">No hay prompts registrados hoy</p>
+                                    <p style="font-size: 1.2em;">No hay prompts registrados en esta sesión</p>
                                     <p>Introduce el porcentaje de uso actual para comenzar</p>
                                 </div>
                             </td>
@@ -472,16 +494,19 @@
     </div>
 
     <script>
-        // Configuración: 4.1€/día para 8h de uso, pero el uso se mide en 5h
+        // Configuración: 4.1€/día para 8h de uso, el uso se mide en sesiones de 5h
         const COST_PER_DAY = 4.1;
         const COST_PER_HOUR = 0.5;
         const HOURS_PER_DAY = 8;
         const USAGE_HOURS = 5;
         const COST_PER_PERCENT = COST_PER_HOUR / 100; // 0.5€ / 100% = 0.005€ por punto porcentual
 
-        let prompts = JSON.parse(localStorage.getItem('todayPrompts')) || [];
+        // Estado actual
+        let currentSessionNumber = parseInt(localStorage.getItem('currentSessionNumber')) || 1;
+        let currentSessionPrompts = JSON.parse(localStorage.getItem('currentSessionPrompts')) || [];
         let lastUsage = parseFloat(localStorage.getItem('lastUsage')) || 0;
         let dailyCost = parseFloat(localStorage.getItem('dailyCost')) || 0;
+        let completedSessions = JSON.parse(localStorage.getItem('completedSessions')) || [];
         let dailyHistory = JSON.parse(localStorage.getItem('dailyHistory')) || [];
 
         function showAlert(message, type = 'success') {
@@ -497,18 +522,24 @@
         }
 
         function updateDashboard() {
-            const totalUsage = lastUsage;
+            // Calcular totales de todas las sesiones del día
+            let allPromptsToday = [...currentSessionPrompts];
+            completedSessions.forEach(session => {
+                allPromptsToday = allPromptsToday.concat(session.prompts);
+            });
+
+            const totalUsageCurrentSession = lastUsage;
             const totalCost = dailyCost;
-            const totalPrompts = prompts.length;
+            const totalPromptsToday = allPromptsToday.length;
+            const totalPromptsCurrentSession = currentSessionPrompts.length;
 
             let avgPerPrompt = 0;
             let avgCostPerPrompt = 0;
             let promptsPerHour = 0;
             let minutesPerPrompt = 0;
 
-            if (totalPrompts > 0) {
-                avgPerPrompt = totalUsage / totalPrompts;
-                avgCostPerPrompt = totalCost / totalPrompts;
+            if (totalPromptsCurrentSession > 0) {
+                avgPerPrompt = totalUsageCurrentSession / totalPromptsCurrentSession;
 
                 if (avgPerPrompt > 0) {
                     promptsPerHour = Math.floor(100 / avgPerPrompt);
@@ -516,34 +547,42 @@
                 }
             }
 
-            document.getElementById('totalUsage').textContent = totalUsage.toFixed(2) + '%';
+            if (totalPromptsToday > 0) {
+                avgCostPerPrompt = totalCost / totalPromptsToday;
+            }
+
+            document.getElementById('totalUsage').textContent = totalUsageCurrentSession.toFixed(2) + '%';
             document.getElementById('totalCost').textContent = totalCost.toFixed(2) + '€';
             document.getElementById('avgCostPerPrompt').textContent = avgCostPerPrompt.toFixed(3) + '€';
-            document.getElementById('totalPrompts').textContent = totalPrompts;
+            document.getElementById('totalPrompts').textContent = totalPromptsToday;
             document.getElementById('avgPerPrompt').textContent = avgPerPrompt.toFixed(2) + '%';
             document.getElementById('promptsPerHour').textContent = promptsPerHour;
             document.getElementById('minutesPerPrompt').textContent = minutesPerPrompt;
 
-            const progressBar = document.getElementById('progressBar');
-            progressBar.style.width = Math.min(totalUsage, 100) + '%';
-            progressBar.textContent = totalUsage.toFixed(1) + '%';
+            document.getElementById('sessionIndicator').textContent = `Sesión ${currentSessionNumber} de 2`;
 
-            if (totalUsage > 90) {
+            const progressBar = document.getElementById('progressBar');
+            progressBar.style.width = Math.min(totalUsageCurrentSession, 100) + '%';
+            progressBar.textContent = totalUsageCurrentSession.toFixed(1) + '%';
+
+            if (totalUsageCurrentSession > 90) {
                 progressBar.style.background = 'linear-gradient(90deg, #ff4757 0%, #ff3838 100%)';
-            } else if (totalUsage > 70) {
+            } else if (totalUsageCurrentSession > 70) {
                 progressBar.style.background = 'linear-gradient(90deg, #ffa502 0%, #ff6348 100%)';
+            } else {
+                progressBar.style.background = 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)';
             }
         }
 
         function updateHistoryTable() {
             const tbody = document.getElementById('historyBody');
 
-            if (prompts.length === 0) {
+            if (currentSessionPrompts.length === 0) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="6" class="empty-state">
                             <div>
-                                <p style="font-size: 1.2em;">No hay prompts registrados hoy</p>
+                                <p style="font-size: 1.2em;">No hay prompts registrados en esta sesión</p>
                                 <p>Introduce el porcentaje de uso actual para comenzar</p>
                             </div>
                         </td>
@@ -552,7 +591,7 @@
                 return;
             }
 
-            tbody.innerHTML = prompts.map((prompt, index) => `
+            tbody.innerHTML = currentSessionPrompts.map((prompt, index) => `
                 <tr>
                     <td>${index + 1}</td>
                     <td>${new Date(prompt.timestamp).toLocaleString('es-ES')}</td>
@@ -619,11 +658,7 @@
 
                 statsHTML += `
                     <div class="day-card">
-                        <h4>${dayName}</h4>
-                        <div class="day-stat">
-                            <span>Uso Total:</span>
-                            <strong>${day.totalUsage.toFixed(2)}%</strong>
-                        </div>
+                        <h4>${dayName} <span class="session-badge">${day.sessions.length} sesiones</span></h4>
                         <div class="day-stat">
                             <span>Coste Total:</span>
                             <strong>${day.totalCost.toFixed(2)}€</strong>
@@ -633,13 +668,28 @@
                             <strong>${day.totalPrompts}</strong>
                         </div>
                         <div class="day-stat">
-                            <span>Uso Medio/Prompt:</span>
-                            <strong>${day.avgPerPrompt.toFixed(2)}%</strong>
-                        </div>
-                        <div class="day-stat">
                             <span>Coste Medio/Prompt:</span>
                             <strong>${day.avgCostPerPrompt.toFixed(3)}€</strong>
                         </div>
+                `;
+
+                // Desglose por sesión
+                day.sessions.forEach((session, idx) => {
+                    statsHTML += `
+                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
+                            <div class="day-stat" style="font-size: 0.9em;">
+                                <span><strong>Sesión ${session.sessionNumber}:</strong></span>
+                                <span>${session.prompts.length} prompts</span>
+                            </div>
+                            <div class="day-stat" style="font-size: 0.9em;">
+                                <span>Uso Total:</span>
+                                <strong>${session.totalUsage.toFixed(2)}%</strong>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                statsHTML += `
                     </div>
                 `;
             });
@@ -650,16 +700,23 @@
 
         function deletePrompt(index) {
             if (confirm('¿Estás seguro de que quieres eliminar este prompt?')) {
-                const deletedPrompt = prompts[index];
-                prompts.splice(index, 1);
+                currentSessionPrompts.splice(index, 1);
 
                 // Recalcular lastUsage y dailyCost
-                if (prompts.length > 0) {
-                    lastUsage = prompts[prompts.length - 1].usage;
-                    dailyCost = prompts.reduce((sum, p) => sum + p.cost, 0);
+                if (currentSessionPrompts.length > 0) {
+                    lastUsage = currentSessionPrompts[currentSessionPrompts.length - 1].usage;
+                    // Recalcular dailyCost sumando todas las sesiones
+                    dailyCost = currentSessionPrompts.reduce((sum, p) => sum + p.cost, 0);
+                    completedSessions.forEach(session => {
+                        dailyCost += session.prompts.reduce((sum, p) => sum + p.cost, 0);
+                    });
                 } else {
                     lastUsage = 0;
+                    // Recalcular solo con sesiones completadas
                     dailyCost = 0;
+                    completedSessions.forEach(session => {
+                        dailyCost += session.prompts.reduce((sum, p) => sum + p.cost, 0);
+                    });
                 }
 
                 saveData();
@@ -694,7 +751,7 @@
                 cost: cost
             };
 
-            prompts.push(newPrompt);
+            currentSessionPrompts.push(newPrompt);
             lastUsage = currentUsage;
             dailyCost += cost;
 
@@ -708,42 +765,84 @@
         });
 
         function saveData() {
-            localStorage.setItem('todayPrompts', JSON.stringify(prompts));
+            localStorage.setItem('currentSessionNumber', currentSessionNumber.toString());
+            localStorage.setItem('currentSessionPrompts', JSON.stringify(currentSessionPrompts));
             localStorage.setItem('lastUsage', lastUsage.toString());
             localStorage.setItem('dailyCost', dailyCost.toString());
+            localStorage.setItem('completedSessions', JSON.stringify(completedSessions));
             localStorage.setItem('dailyHistory', JSON.stringify(dailyHistory));
         }
 
         function resetSession() {
-            if (confirm('¿Reiniciar la sesión? Esto borrará el histórico de prompts pero mantendrá el coste diario acumulado.')) {
-                prompts = [];
+            if (currentSessionPrompts.length === 0) {
+                showAlert('No hay datos en la sesión actual para guardar', 'warning');
+                return;
+            }
+
+            if (confirm('¿Iniciar nueva sesión? Esto guardará la sesión actual internamente y comenzará una nueva sesión de 5h.')) {
+                // Guardar la sesión actual en completedSessions
+                const sessionData = {
+                    sessionNumber: currentSessionNumber,
+                    startTime: currentSessionPrompts[0].timestamp,
+                    endTime: currentSessionPrompts[currentSessionPrompts.length - 1].timestamp,
+                    totalUsage: lastUsage,
+                    prompts: currentSessionPrompts
+                };
+
+                completedSessions.push(sessionData);
+
+                // Limpiar para nueva sesión
+                currentSessionNumber++;
+                currentSessionPrompts = [];
                 lastUsage = 0;
-                // NO reseteamos dailyCost - se mantiene
+                // dailyCost se mantiene
+
                 saveData();
                 updateDashboard();
                 updateHistoryTable();
-                showAlert('Sesión reiniciada. Uso reseteado a 0%. Coste diario conservado: ' + dailyCost.toFixed(2) + '€', 'success');
+
+                showAlert(`Sesión ${sessionData.sessionNumber} guardada. Ahora en Sesión ${currentSessionNumber}. Coste diario: ${dailyCost.toFixed(2)}€`, 'success');
             }
         }
 
         function endDay() {
-            if (prompts.length === 0 && dailyCost === 0) {
+            // Verificar si hay datos para guardar
+            const hasCurrentSessionData = currentSessionPrompts.length > 0;
+            const hasCompletedSessions = completedSessions.length > 0;
+
+            if (!hasCurrentSessionData && !hasCompletedSessions && dailyCost === 0) {
                 showAlert('No hay datos para guardar del día de hoy', 'warning');
                 return;
             }
 
-            if (confirm('¿Acabar el día? Esto guardará las estadísticas de hoy y comenzará un nuevo día.')) {
-                // Guardar estadísticas del día
+            if (confirm('¿Acabar el día? Esto guardará todas las sesiones de hoy en las estadísticas semanales y comenzará un nuevo día.')) {
+                // Guardar sesión actual si tiene datos
+                let allSessions = [...completedSessions];
+                if (hasCurrentSessionData) {
+                    const currentSessionData = {
+                        sessionNumber: currentSessionNumber,
+                        startTime: currentSessionPrompts[0].timestamp,
+                        endTime: currentSessionPrompts[currentSessionPrompts.length - 1].timestamp,
+                        totalUsage: lastUsage,
+                        prompts: currentSessionPrompts
+                    };
+                    allSessions.push(currentSessionData);
+                }
+
+                // Calcular totales del día
+                let allPromptsDay = [];
+                allSessions.forEach(session => {
+                    allPromptsDay = allPromptsDay.concat(session.prompts);
+                });
+
                 const today = new Date().toISOString().split('T')[0];
 
                 const dayData = {
                     date: today,
-                    totalUsage: lastUsage,
                     totalCost: dailyCost,
-                    totalPrompts: prompts.length,
-                    avgPerPrompt: prompts.length > 0 ? lastUsage / prompts.length : 0,
-                    avgCostPerPrompt: prompts.length > 0 ? dailyCost / prompts.length : 0,
-                    prompts: prompts
+                    totalPrompts: allPromptsDay.length,
+                    avgCostPerPrompt: allPromptsDay.length > 0 ? dailyCost / allPromptsDay.length : 0,
+                    sessions: allSessions
                 };
 
                 // Añadir al historial (mantener solo últimos 7 días)
@@ -753,16 +852,18 @@
                 }
 
                 // Resetear día
-                prompts = [];
+                currentSessionNumber = 1;
+                currentSessionPrompts = [];
                 lastUsage = 0;
                 dailyCost = 0;
+                completedSessions = [];
 
                 saveData();
                 updateDashboard();
                 updateHistoryTable();
                 updateWeeklyStats();
 
-                showAlert('Día finalizado. Datos guardados en estadísticas semanales. ¡Nuevo día comenzado!', 'success');
+                showAlert(`Día finalizado. ${allSessions.length} sesiones guardadas con ${allPromptsDay.length} prompts totales. ¡Nuevo día comenzado!`, 'success');
             }
         }
 
