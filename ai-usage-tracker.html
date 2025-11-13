@@ -283,6 +283,7 @@
             padding: 20px;
             border-radius: 10px;
             margin-bottom: 20px;
+            position: relative;
         }
 
         .chart-title {
@@ -295,6 +296,34 @@
         .chart {
             width: 100%;
             height: 300px;
+            position: relative;
+        }
+
+        .chart-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 1000;
+            white-space: nowrap;
+        }
+
+        .chart-tooltip.active {
+            opacity: 1;
+        }
+
+        .chart-point {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .chart-point:hover {
+            r: 5;
         }
 
         .session-badge {
@@ -479,7 +508,7 @@
             </div>
         </div>
 
-        <!-- NUEVA SECCIÓN: Estadísticas del Día Actual -->
+        <!-- SECCIÓN: Estadísticas del Día Actual -->
         <div class="stats-section" id="todayStatsSection">
             <h2>📊 Estadísticas del Día Actual</h2>
             <div id="todayStatsContent"></div>
@@ -607,9 +636,10 @@
             `).join('');
         }
 
-        function createLineChart(data, labels, title, color = '#667eea') {
+        function createLineChart(data, labels, title, color = '#667eea', suffix = '') {
             if (!data || data.length === 0) return '<p class="empty-state">No hay datos suficientes</p>';
 
+            const chartId = 'chart-' + Math.random().toString(36).substr(2, 9);
             const width = 100;
             const height = 80;
             const padding = 10;
@@ -624,18 +654,51 @@
                 return `${x},${y}`;
             }).join(' ');
 
-            const dots = data.map((value, index) => {
+            const circles = data.map((value, index) => {
                 const x = padding + (index / (data.length - 1 || 1)) * (width - 2 * padding);
                 const y = height - padding - ((value - minValue) / range) * (height - 2 * padding);
-                return `<circle cx="${x}" cy="${y}" r="2" fill="${color}" />`;
+                const displayValue = value.toFixed(2) + suffix;
+                const label = labels && labels[index] ? labels[index] : `Punto ${index + 1}`;
+                return `<circle class="chart-point" cx="${x}" cy="${y}" r="3" fill="${color}"
+                    onmouseover="showTooltip(event, '${label}: ${displayValue}')"
+                    onmouseout="hideTooltip()" />`;
             }).join('');
 
             return `
-                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
-                    <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" />
-                    ${dots}
-                </svg>
+                <div style="position: relative;">
+                    <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
+                        <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" />
+                        ${circles}
+                    </svg>
+                    <div id="${chartId}-tooltip" class="chart-tooltip"></div>
+                </div>
             `;
+        }
+
+        function showTooltip(event, text) {
+            const tooltip = document.querySelector('.chart-tooltip');
+            if (!tooltip) {
+                const newTooltip = document.createElement('div');
+                newTooltip.className = 'chart-tooltip';
+                newTooltip.textContent = text;
+                document.body.appendChild(newTooltip);
+
+                newTooltip.style.left = (event.pageX + 10) + 'px';
+                newTooltip.style.top = (event.pageY - 30) + 'px';
+                setTimeout(() => newTooltip.classList.add('active'), 10);
+            } else {
+                tooltip.textContent = text;
+                tooltip.style.left = (event.pageX + 10) + 'px';
+                tooltip.style.top = (event.pageY - 30) + 'px';
+                tooltip.classList.add('active');
+            }
+        }
+
+        function hideTooltip() {
+            const tooltip = document.querySelector('.chart-tooltip');
+            if (tooltip) {
+                tooltip.classList.remove('active');
+            }
         }
 
         function updateTodayStats() {
@@ -672,7 +735,7 @@
                 cumulativeCost += prompt.cost;
                 usageOverTime.push(cumulativeUsage);
                 costOverTime.push(cumulativeCost);
-                timeLabels.push(index + 1);
+                timeLabels.push(`Prompt ${index + 1}`);
             });
 
             let html = `
@@ -713,12 +776,12 @@
 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px;">
                     <div class="chart-container">
-                        <div class="chart-title">Evolución de Uso (%)</div>
-                        <div class="chart">${createLineChart(usageOverTime, timeLabels, 'Uso', '#667eea')}</div>
+                        <div class="chart-title">Evolución de Uso (%) - Hover para detalles</div>
+                        <div class="chart">${createLineChart(usageOverTime, timeLabels, 'Uso', '#667eea', '%')}</div>
                     </div>
                     <div class="chart-container">
-                        <div class="chart-title">Evolución de Coste (€)</div>
-                        <div class="chart">${createLineChart(costOverTime, timeLabels, 'Coste', '#2ecc71')}</div>
+                        <div class="chart-title">Evolución de Coste (€) - Hover para detalles</div>
+                        <div class="chart">${createLineChart(costOverTime, timeLabels, 'Coste', '#2ecc71', '€')}</div>
                     </div>
                 </div>
             `;
@@ -729,11 +792,14 @@
         function updateWeeklyStats() {
             const content = document.getElementById('weeklyStatsContent');
 
+            // CAMBIO: Mostrar siempre, incluso con 0 días
             if (dailyHistory.length === 0) {
+                // Mostrar mensaje pero mantener la estructura para cuando haya datos
                 content.innerHTML = `
                     <div class="empty-state">
-                        <p>No hay datos semanales disponibles</p>
-                        <p>Los datos se guardarán al finalizar cada día con "Acabar el Día"</p>
+                        <p style="font-size: 1.2em;">📅 Aún no hay historial semanal</p>
+                        <p>Al finalizar el día actual con "Acabar el Día", aparecerán aquí las estadísticas y gráficos de la semana.</p>
+                        <p style="margin-top: 10px; color: #667eea;">Los datos del día actual se están registrando en "Estadísticas del Día Actual" ↑</p>
                     </div>
                 `;
                 return;
@@ -779,6 +845,11 @@
                 return d.totalPrompts > 0 ? totalUsage / d.totalPrompts : 0;
             }).reverse();
 
+            const dayLabels = dailyHistory.map((d, i) => {
+                const date = new Date(d.date);
+                return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+            }).reverse();
+
             let html = `
                 <div class="stats-grid">
                     <div class="mini-stat">
@@ -815,26 +886,27 @@
                     </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 30px;">
+                <h3 style="color: #667eea; margin: 30px 0 15px 0;">📊 Gráficos de Evolución (Hover para detalles)</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px;">
                     <div class="chart-container">
                         <div class="chart-title">Evolución Coste Diario (€)</div>
-                        <div class="chart">${createLineChart(dailyCosts, [], 'Coste', '#667eea')}</div>
+                        <div class="chart">${createLineChart(dailyCosts, dayLabels, 'Coste', '#667eea', '€')}</div>
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">Evolución Prompts Diarios</div>
-                        <div class="chart">${createLineChart(dailyPrompts, [], 'Prompts', '#2ecc71')}</div>
+                        <div class="chart">${createLineChart(dailyPrompts, dayLabels, 'Prompts', '#2ecc71', '')}</div>
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">Evolución % Medio por Prompt</div>
-                        <div class="chart">${createLineChart(dailyAvgUsage, [], 'Uso %', '#ffa502')}</div>
+                        <div class="chart">${createLineChart(dailyAvgUsage, dayLabels, 'Uso %', '#ffa502', '%')}</div>
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">Evolución Coste Medio/Prompt (€)</div>
-                        <div class="chart">${createLineChart(dailyAvgCost, [], 'Coste', '#ff6348')}</div>
+                        <div class="chart">${createLineChart(dailyAvgCost, dayLabels, 'Coste', '#ff6348', '€')}</div>
                     </div>
                 </div>
 
-                <h3 style="color: #667eea; margin: 30px 0 15px 0;">Desglose por Día</h3>
+                <h3 style="color: #667eea; margin: 30px 0 15px 0;">📅 Desglose por Día</h3>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
             `;
 
@@ -943,7 +1015,9 @@
             saveData();
             updateAll();
 
+            // LIMPIAR EL CAMPO DESPUÉS DE REGISTRAR
             document.getElementById('currentUsage').value = '';
+            document.getElementById('currentUsage').focus();
 
             showAlert(`Prompt registrado: ${consumed.toFixed(2)}% consumido (${cost.toFixed(3)}€)`, 'success');
         });
