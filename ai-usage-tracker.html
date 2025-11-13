@@ -183,7 +183,7 @@
             background: #27ae60;
         }
 
-        .history-section {
+        .history-section, .stats-section {
             background: white;
             padding: 30px;
             border-radius: 15px;
@@ -191,7 +191,7 @@
             margin-bottom: 30px;
         }
 
-        .history-section h2 {
+        .history-section h2, .stats-section h2 {
             color: #667eea;
             margin-bottom: 20px;
             font-size: 1.8em;
@@ -271,48 +271,30 @@
             border: 1px solid #f5c6cb;
         }
 
-        .weekly-stats {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
             margin-bottom: 30px;
         }
 
-        .weekly-stats h2 {
-            color: #667eea;
-            margin-bottom: 20px;
-            font-size: 1.8em;
-        }
-
-        .weekly-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .day-card {
+        .chart-container {
             background: #f8f9ff;
             padding: 20px;
             border-radius: 10px;
-            border-left: 4px solid #667eea;
+            margin-bottom: 20px;
         }
 
-        .day-card h4 {
+        .chart-title {
+            font-size: 1.2em;
+            font-weight: bold;
             color: #667eea;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
 
-        .day-stat {
-            display: flex;
-            justify-content: space-between;
-            margin: 5px 0;
-            color: #666;
-        }
-
-        .day-stat strong {
-            color: #333;
+        .chart {
+            width: 100%;
+            height: 300px;
         }
 
         .session-badge {
@@ -351,7 +333,7 @@
                 padding: 10px 5px;
             }
 
-            .weekly-grid {
+            .stats-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -368,6 +350,25 @@
 
         .delete-btn:hover {
             background: #ff3838;
+        }
+
+        .mini-stat {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+        }
+
+        .mini-stat-label {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .mini-stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
         }
     </style>
 </head>
@@ -478,18 +479,21 @@
             </div>
         </div>
 
-        <div class="weekly-stats" id="weeklyStatsSection">
+        <!-- NUEVA SECCIÓN: Estadísticas del Día Actual -->
+        <div class="stats-section" id="todayStatsSection">
+            <h2>📊 Estadísticas del Día Actual</h2>
+            <div id="todayStatsContent"></div>
+        </div>
+
+        <!-- Estadísticas Semanales -->
+        <div class="stats-section" id="weeklyStatsSection">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2 style="margin: 0;">Estadísticas Semanales (Últimos 7 días)</h2>
+                <h2 style="margin: 0;">📈 Estadísticas Semanales (Últimos 7 días)</h2>
                 <button class="btn-success" onclick="exportWeeklyData()" style="min-width: auto; flex: none;">
-                    📊 Exportar Datos
+                    💾 Exportar Datos
                 </button>
             </div>
-            <div id="weeklyStatsContent">
-                <div class="empty-state">
-                    <p>No hay datos semanales disponibles</p>
-                </div>
-            </div>
+            <div id="weeklyStatsContent"></div>
         </div>
     </div>
 
@@ -499,7 +503,7 @@
         const COST_PER_HOUR = 0.5;
         const HOURS_PER_DAY = 8;
         const USAGE_HOURS = 5;
-        const COST_PER_PERCENT = COST_PER_HOUR / 100; // 0.5€ / 100% = 0.005€ por punto porcentual
+        const COST_PER_PERCENT = COST_PER_HOUR / 100;
 
         // Estado actual
         let currentSessionNumber = parseInt(localStorage.getItem('currentSessionNumber')) || 1;
@@ -522,7 +526,6 @@
         }
 
         function updateDashboard() {
-            // Calcular totales de todas las sesiones del día
             let allPromptsToday = [...currentSessionPrompts];
             completedSessions.forEach(session => {
                 allPromptsToday = allPromptsToday.concat(session.prompts);
@@ -540,7 +543,6 @@
 
             if (totalPromptsCurrentSession > 0) {
                 avgPerPrompt = totalUsageCurrentSession / totalPromptsCurrentSession;
-
                 if (avgPerPrompt > 0) {
                     promptsPerHour = Math.floor(100 / avgPerPrompt);
                     minutesPerPrompt = (60 / promptsPerHour).toFixed(1);
@@ -605,6 +607,125 @@
             `).join('');
         }
 
+        function createLineChart(data, labels, title, color = '#667eea') {
+            if (!data || data.length === 0) return '<p class="empty-state">No hay datos suficientes</p>';
+
+            const width = 100;
+            const height = 80;
+            const padding = 10;
+
+            const maxValue = Math.max(...data, 1);
+            const minValue = Math.min(...data, 0);
+            const range = maxValue - minValue || 1;
+
+            const points = data.map((value, index) => {
+                const x = padding + (index / (data.length - 1 || 1)) * (width - 2 * padding);
+                const y = height - padding - ((value - minValue) / range) * (height - 2 * padding);
+                return `${x},${y}`;
+            }).join(' ');
+
+            const dots = data.map((value, index) => {
+                const x = padding + (index / (data.length - 1 || 1)) * (width - 2 * padding);
+                const y = height - padding - ((value - minValue) / range) * (height - 2 * padding);
+                return `<circle cx="${x}" cy="${y}" r="2" fill="${color}" />`;
+            }).join('');
+
+            return `
+                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
+                    <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" />
+                    ${dots}
+                </svg>
+            `;
+        }
+
+        function updateTodayStats() {
+            const content = document.getElementById('todayStatsContent');
+
+            let allPromptsToday = [...currentSessionPrompts];
+            completedSessions.forEach(session => {
+                allPromptsToday = allPromptsToday.concat(session.prompts);
+            });
+
+            if (allPromptsToday.length === 0) {
+                content.innerHTML = '<div class="empty-state"><p>No hay prompts registrados hoy. Comienza a registrar para ver las estadísticas.</p></div>';
+                return;
+            }
+
+            // Calcular estadísticas del día
+            const totalUsageToday = completedSessions.reduce((sum, s) => sum + s.totalUsage, 0) + lastUsage;
+            const totalCostToday = dailyCost;
+            const totalPromptsToday = allPromptsToday.length;
+            const avgUsagePerPrompt = totalUsageToday / totalPromptsToday;
+            const avgCostPerPrompt = totalCostToday / totalPromptsToday;
+            const promptsPerHour = avgUsagePerPrompt > 0 ? Math.floor(100 / avgUsagePerPrompt) : 0;
+            const minutesPerPrompt = promptsPerHour > 0 ? (60 / promptsPerHour).toFixed(1) : 0;
+
+            // Datos para gráficos (evolución temporal)
+            const usageOverTime = [];
+            const costOverTime = [];
+            const timeLabels = [];
+            let cumulativeUsage = 0;
+            let cumulativeCost = 0;
+
+            allPromptsToday.forEach((prompt, index) => {
+                cumulativeUsage += prompt.consumed;
+                cumulativeCost += prompt.cost;
+                usageOverTime.push(cumulativeUsage);
+                costOverTime.push(cumulativeCost);
+                timeLabels.push(index + 1);
+            });
+
+            let html = `
+                <div class="stats-grid">
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Uso Total Hoy</div>
+                        <div class="mini-stat-value">${totalUsageToday.toFixed(2)}%</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Coste Total Hoy</div>
+                        <div class="mini-stat-value">${totalCostToday.toFixed(2)}€</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Total Prompts</div>
+                        <div class="mini-stat-value">${totalPromptsToday}</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">% Medio/Prompt</div>
+                        <div class="mini-stat-value">${avgUsagePerPrompt.toFixed(2)}%</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Coste Medio/Prompt</div>
+                        <div class="mini-stat-value">${avgCostPerPrompt.toFixed(3)}€</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Prompts/Hora</div>
+                        <div class="mini-stat-value">${promptsPerHour}</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Minutos/Prompt</div>
+                        <div class="mini-stat-value">${minutesPerPrompt} min</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Sesiones Hoy</div>
+                        <div class="mini-stat-value">${completedSessions.length + 1}</div>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px;">
+                    <div class="chart-container">
+                        <div class="chart-title">Evolución de Uso (%)</div>
+                        <div class="chart">${createLineChart(usageOverTime, timeLabels, 'Uso', '#667eea')}</div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">Evolución de Coste (€)</div>
+                        <div class="chart">${createLineChart(costOverTime, timeLabels, 'Coste', '#2ecc71')}</div>
+                    </div>
+                </div>
+            `;
+
+            content.innerHTML = html;
+        }
+
         function updateWeeklyStats() {
             const content = document.getElementById('weeklyStatsContent');
 
@@ -612,107 +733,172 @@
                 content.innerHTML = `
                     <div class="empty-state">
                         <p>No hay datos semanales disponibles</p>
-                        <p>Los datos se guardarán al finalizar cada día</p>
+                        <p>Los datos se guardarán al finalizar cada día con "Acabar el Día"</p>
                     </div>
                 `;
                 return;
             }
 
-            // Calcular estadísticas generales de la semana
+            // Calcular estadísticas semanales
             const totalWeeklyCost = dailyHistory.reduce((sum, day) => sum + day.totalCost, 0);
             const totalWeeklyPrompts = dailyHistory.reduce((sum, day) => sum + day.totalPrompts, 0);
             const avgDailyCost = totalWeeklyCost / dailyHistory.length;
             const avgDailyPrompts = totalWeeklyPrompts / dailyHistory.length;
 
-            let statsHTML = `
-                <div class="weekly-grid">
-                    <div class="stat-card">
-                        <h3>Coste Total Semanal</h3>
-                        <div class="stat-value">${totalWeeklyCost.toFixed(2)}€</div>
-                        <div class="stat-label">${dailyHistory.length} días registrados</div>
+            // Calcular promedios
+            let totalAvgUsagePerPrompt = 0;
+            let totalPromptsPerHour = 0;
+            let totalMinutesPerPrompt = 0;
+            let daysWithData = 0;
+
+            dailyHistory.forEach(day => {
+                if (day.totalPrompts > 0) {
+                    const totalUsageDay = day.sessions.reduce((sum, s) => sum + s.totalUsage, 0);
+                    const avgUsage = totalUsageDay / day.totalPrompts;
+                    totalAvgUsagePerPrompt += avgUsage;
+
+                    if (avgUsage > 0) {
+                        const pph = 100 / avgUsage;
+                        totalPromptsPerHour += pph;
+                        totalMinutesPerPrompt += (60 / pph);
+                    }
+                    daysWithData++;
+                }
+            });
+
+            const weeklyAvgUsagePerPrompt = daysWithData > 0 ? totalAvgUsagePerPrompt / daysWithData : 0;
+            const weeklyAvgPromptsPerHour = daysWithData > 0 ? totalPromptsPerHour / daysWithData : 0;
+            const weeklyAvgMinutesPerPrompt = daysWithData > 0 ? totalMinutesPerPrompt / daysWithData : 0;
+
+            // Datos para gráficos semanales
+            const dailyCosts = dailyHistory.map(d => d.totalCost).reverse();
+            const dailyPrompts = dailyHistory.map(d => d.totalPrompts).reverse();
+            const dailyAvgCost = dailyHistory.map(d => d.avgCostPerPrompt).reverse();
+            const dailyAvgUsage = dailyHistory.map(d => {
+                const totalUsage = d.sessions.reduce((sum, s) => sum + s.totalUsage, 0);
+                return d.totalPrompts > 0 ? totalUsage / d.totalPrompts : 0;
+            }).reverse();
+
+            let html = `
+                <div class="stats-grid">
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Coste Total Semanal</div>
+                        <div class="mini-stat-value">${totalWeeklyCost.toFixed(2)}€</div>
                     </div>
-                    <div class="stat-card">
-                        <h3>Prompts Totales</h3>
-                        <div class="stat-value">${totalWeeklyPrompts}</div>
-                        <div class="stat-label">esta semana</div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Prompts Totales</div>
+                        <div class="mini-stat-value">${totalWeeklyPrompts}</div>
                     </div>
-                    <div class="stat-card">
-                        <h3>Coste Medio Diario</h3>
-                        <div class="stat-value">${avgDailyCost.toFixed(2)}€</div>
-                        <div class="stat-label">por día</div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Coste Medio/Día</div>
+                        <div class="mini-stat-value">${avgDailyCost.toFixed(2)}€</div>
                     </div>
-                    <div class="stat-card">
-                        <h3>Prompts Medio Diario</h3>
-                        <div class="stat-value">${avgDailyPrompts.toFixed(1)}</div>
-                        <div class="stat-label">por día</div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Prompts Medio/Día</div>
+                        <div class="mini-stat-value">${avgDailyPrompts.toFixed(1)}</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">% Medio/Prompt</div>
+                        <div class="mini-stat-value">${weeklyAvgUsagePerPrompt.toFixed(2)}%</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Prompts/Hora Promedio</div>
+                        <div class="mini-stat-value">${weeklyAvgPromptsPerHour.toFixed(1)}</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Minutos/Prompt Promedio</div>
+                        <div class="mini-stat-value">${weeklyAvgMinutesPerPrompt.toFixed(1)} min</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Días Registrados</div>
+                        <div class="mini-stat-value">${dailyHistory.length}</div>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 30px;">
+                    <div class="chart-container">
+                        <div class="chart-title">Evolución Coste Diario (€)</div>
+                        <div class="chart">${createLineChart(dailyCosts, [], 'Coste', '#667eea')}</div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">Evolución Prompts Diarios</div>
+                        <div class="chart">${createLineChart(dailyPrompts, [], 'Prompts', '#2ecc71')}</div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">Evolución % Medio por Prompt</div>
+                        <div class="chart">${createLineChart(dailyAvgUsage, [], 'Uso %', '#ffa502')}</div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">Evolución Coste Medio/Prompt (€)</div>
+                        <div class="chart">${createLineChart(dailyAvgCost, [], 'Coste', '#ff6348')}</div>
                     </div>
                 </div>
 
                 <h3 style="color: #667eea; margin: 30px 0 15px 0;">Desglose por Día</h3>
-                <div class="weekly-grid">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
             `;
 
             dailyHistory.forEach(day => {
                 const date = new Date(day.date);
                 const dayName = date.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                const totalUsageDay = day.sessions.reduce((sum, s) => sum + s.totalUsage, 0);
+                const avgUsageDay = day.totalPrompts > 0 ? totalUsageDay / day.totalPrompts : 0;
 
-                statsHTML += `
-                    <div class="day-card">
-                        <h4>${dayName} <span class="session-badge">${day.sessions.length} sesiones</span></h4>
-                        <div class="day-stat">
+                html += `
+                    <div style="background: #f8f9ff; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
+                        <h4 style="color: #667eea; margin-bottom: 10px;">${dayName} <span class="session-badge">${day.sessions.length} sesiones</span></h4>
+                        <div style="display: flex; justify-content: space-between; margin: 5px 0; color: #666;">
                             <span>Coste Total:</span>
-                            <strong>${day.totalCost.toFixed(2)}€</strong>
+                            <strong style="color: #333;">${day.totalCost.toFixed(2)}€</strong>
                         </div>
-                        <div class="day-stat">
+                        <div style="display: flex; justify-content: space-between; margin: 5px 0; color: #666;">
                             <span>Total Prompts:</span>
-                            <strong>${day.totalPrompts}</strong>
+                            <strong style="color: #333;">${day.totalPrompts}</strong>
                         </div>
-                        <div class="day-stat">
+                        <div style="display: flex; justify-content: space-between; margin: 5px 0; color: #666;">
                             <span>Coste Medio/Prompt:</span>
-                            <strong>${day.avgCostPerPrompt.toFixed(3)}€</strong>
+                            <strong style="color: #333;">${day.avgCostPerPrompt.toFixed(3)}€</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin: 5px 0; color: #666;">
+                            <span>% Medio/Prompt:</span>
+                            <strong style="color: #333;">${avgUsageDay.toFixed(2)}%</strong>
                         </div>
                 `;
 
-                // Desglose por sesión
-                day.sessions.forEach((session, idx) => {
-                    statsHTML += `
+                day.sessions.forEach(session => {
+                    html += `
                         <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
-                            <div class="day-stat" style="font-size: 0.9em;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.9em;">
                                 <span><strong>Sesión ${session.sessionNumber}:</strong></span>
                                 <span>${session.prompts.length} prompts</span>
                             </div>
-                            <div class="day-stat" style="font-size: 0.9em;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: #666;">
                                 <span>Uso Total:</span>
-                                <strong>${session.totalUsage.toFixed(2)}%</strong>
+                                <strong style="color: #333;">${session.totalUsage.toFixed(2)}%</strong>
                             </div>
                         </div>
                     `;
                 });
 
-                statsHTML += `
-                    </div>
-                `;
+                html += `</div>`;
             });
 
-            statsHTML += '</div>';
-            content.innerHTML = statsHTML;
+            html += '</div>';
+            content.innerHTML = html;
         }
 
         function deletePrompt(index) {
             if (confirm('¿Estás seguro de que quieres eliminar este prompt?')) {
                 currentSessionPrompts.splice(index, 1);
 
-                // Recalcular lastUsage y dailyCost
                 if (currentSessionPrompts.length > 0) {
                     lastUsage = currentSessionPrompts[currentSessionPrompts.length - 1].usage;
-                    // Recalcular dailyCost sumando todas las sesiones
                     dailyCost = currentSessionPrompts.reduce((sum, p) => sum + p.cost, 0);
                     completedSessions.forEach(session => {
                         dailyCost += session.prompts.reduce((sum, p) => sum + p.cost, 0);
                     });
                 } else {
                     lastUsage = 0;
-                    // Recalcular solo con sesiones completadas
                     dailyCost = 0;
                     completedSessions.forEach(session => {
                         dailyCost += session.prompts.reduce((sum, p) => sum + p.cost, 0);
@@ -720,8 +906,7 @@
                 }
 
                 saveData();
-                updateDashboard();
-                updateHistoryTable();
+                updateAll();
                 showAlert('Prompt eliminado correctamente', 'success');
             }
         }
@@ -756,8 +941,7 @@
             dailyCost += cost;
 
             saveData();
-            updateDashboard();
-            updateHistoryTable();
+            updateAll();
 
             document.getElementById('currentUsage').value = '';
 
@@ -780,7 +964,6 @@
             }
 
             if (confirm('¿Iniciar nueva sesión? Esto guardará la sesión actual internamente y comenzará una nueva sesión de 5h.')) {
-                // Guardar la sesión actual en completedSessions
                 const sessionData = {
                     sessionNumber: currentSessionNumber,
                     startTime: currentSessionPrompts[0].timestamp,
@@ -791,22 +974,18 @@
 
                 completedSessions.push(sessionData);
 
-                // Limpiar para nueva sesión
                 currentSessionNumber++;
                 currentSessionPrompts = [];
                 lastUsage = 0;
-                // dailyCost se mantiene
 
                 saveData();
-                updateDashboard();
-                updateHistoryTable();
+                updateAll();
 
                 showAlert(`Sesión ${sessionData.sessionNumber} guardada. Ahora en Sesión ${currentSessionNumber}. Coste diario: ${dailyCost.toFixed(2)}€`, 'success');
             }
         }
 
         function endDay() {
-            // Verificar si hay datos para guardar
             const hasCurrentSessionData = currentSessionPrompts.length > 0;
             const hasCompletedSessions = completedSessions.length > 0;
 
@@ -816,7 +995,6 @@
             }
 
             if (confirm('¿Acabar el día? Esto guardará todas las sesiones de hoy en las estadísticas semanales y comenzará un nuevo día.')) {
-                // Guardar sesión actual si tiene datos
                 let allSessions = [...completedSessions];
                 if (hasCurrentSessionData) {
                     const currentSessionData = {
@@ -829,7 +1007,6 @@
                     allSessions.push(currentSessionData);
                 }
 
-                // Calcular totales del día
                 let allPromptsDay = [];
                 allSessions.forEach(session => {
                     allPromptsDay = allPromptsDay.concat(session.prompts);
@@ -845,13 +1022,11 @@
                     sessions: allSessions
                 };
 
-                // Añadir al historial (mantener solo últimos 7 días)
                 dailyHistory.unshift(dayData);
                 if (dailyHistory.length > 7) {
                     dailyHistory = dailyHistory.slice(0, 7);
                 }
 
-                // Resetear día
                 currentSessionNumber = 1;
                 currentSessionPrompts = [];
                 lastUsage = 0;
@@ -859,9 +1034,7 @@
                 completedSessions = [];
 
                 saveData();
-                updateDashboard();
-                updateHistoryTable();
-                updateWeeklyStats();
+                updateAll();
 
                 showAlert(`Día finalizado. ${allSessions.length} sesiones guardadas con ${allPromptsDay.length} prompts totales. ¡Nuevo día comenzado!`, 'success');
             }
@@ -873,7 +1046,6 @@
                 return;
             }
 
-            // Preparar datos para exportación
             const exportData = {
                 exportDate: new Date().toISOString(),
                 summary: {
@@ -886,11 +1058,9 @@
                 dailyData: dailyHistory
             };
 
-            // Crear archivo JSON
             const dataStr = JSON.stringify(exportData, null, 2);
             const dataBlob = new Blob([dataStr], { type: 'application/json' });
 
-            // Crear link de descarga
             const url = URL.createObjectURL(dataBlob);
             const link = document.createElement('a');
             link.href = url;
@@ -904,10 +1074,15 @@
             showAlert('Datos exportados correctamente en formato JSON', 'success');
         }
 
+        function updateAll() {
+            updateDashboard();
+            updateHistoryTable();
+            updateTodayStats();
+            updateWeeklyStats();
+        }
+
         // Inicializar la aplicación
-        updateDashboard();
-        updateHistoryTable();
-        updateWeeklyStats();
+        updateAll();
     </script>
 </body>
 </html>
