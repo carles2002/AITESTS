@@ -323,7 +323,8 @@
         }
 
         .chart-point:hover {
-            r: 5;
+            r: 8;
+            filter: brightness(1.2);
         }
 
         .session-badge {
@@ -640,9 +641,9 @@
             if (!data || data.length === 0) return '<p class="empty-state">No hay datos suficientes</p>';
 
             const chartId = 'chart-' + Math.random().toString(36).substr(2, 9);
-            const width = 100;
-            const height = 80;
-            const padding = 10;
+            const width = 800;
+            const height = 300;
+            const padding = 40;
 
             const maxValue = Math.max(...data, 1);
             const minValue = Math.min(...data, 0);
@@ -659,18 +660,17 @@
                 const y = height - padding - ((value - minValue) / range) * (height - 2 * padding);
                 const displayValue = value.toFixed(2) + suffix;
                 const label = labels && labels[index] ? labels[index] : `Punto ${index + 1}`;
-                return `<circle class="chart-point" cx="${x}" cy="${y}" r="3" fill="${color}"
+                return `<circle class="chart-point" cx="${x}" cy="${y}" r="6" fill="${color}"
                     onmouseover="showTooltip(event, '${label}: ${displayValue}')"
                     onmouseout="hideTooltip()" />`;
             }).join('');
 
             return `
-                <div style="position: relative;">
-                    <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
-                        <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" />
+                <div style="position: relative; width: 100%; height: 300px;">
+                    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" style="width: 100%; height: 100%;">
+                        <polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" />
                         ${circles}
                     </svg>
-                    <div id="${chartId}-tooltip" class="chart-tooltip"></div>
                 </div>
             `;
         }
@@ -792,24 +792,60 @@
         function updateWeeklyStats() {
             const content = document.getElementById('weeklyStatsContent');
 
-            // CAMBIO: Mostrar siempre, incluso con 0 días
-            if (dailyHistory.length === 0) {
-                // Mostrar mensaje pero mantener la estructura para cuando haya datos
+            // Verificar si hay datos del día actual
+            let allPromptsToday = [...currentSessionPrompts];
+            completedSessions.forEach(session => {
+                allPromptsToday = allPromptsToday.concat(session.prompts);
+            });
+
+            const hasTodayData = allPromptsToday.length > 0;
+
+            // Si no hay historial NI datos de hoy, mostrar mensaje
+            if (dailyHistory.length === 0 && !hasTodayData) {
                 content.innerHTML = `
                     <div class="empty-state">
                         <p style="font-size: 1.2em;">📅 Aún no hay historial semanal</p>
-                        <p>Al finalizar el día actual con "Acabar el Día", aparecerán aquí las estadísticas y gráficos de la semana.</p>
-                        <p style="margin-top: 10px; color: #667eea;">Los datos del día actual se están registrando en "Estadísticas del Día Actual" ↑</p>
+                        <p>Registra algunos prompts para comenzar a ver las estadísticas.</p>
+                        <p style="margin-top: 10px; color: #667eea;">Los datos del día actual aparecerán aquí automáticamente.</p>
                     </div>
                 `;
                 return;
             }
 
-            // Calcular estadísticas semanales
-            const totalWeeklyCost = dailyHistory.reduce((sum, day) => sum + day.totalCost, 0);
-            const totalWeeklyPrompts = dailyHistory.reduce((sum, day) => sum + day.totalPrompts, 0);
-            const avgDailyCost = totalWeeklyCost / dailyHistory.length;
-            const avgDailyPrompts = totalWeeklyPrompts / dailyHistory.length;
+            // Crear array combinado: historial + día actual (si hay datos)
+            let allDays = [...dailyHistory];
+
+            if (hasTodayData) {
+                // Crear objeto del día actual para incluirlo en las estadísticas
+                let allSessionsToday = [...completedSessions];
+                if (currentSessionPrompts.length > 0) {
+                    allSessionsToday.push({
+                        sessionNumber: currentSessionNumber,
+                        totalUsage: lastUsage,
+                        prompts: currentSessionPrompts
+                    });
+                }
+
+                const totalUsageToday = allSessionsToday.reduce((sum, s) => sum + s.totalUsage, 0);
+
+                const todayData = {
+                    date: new Date().toISOString().split('T')[0],
+                    totalCost: dailyCost,
+                    totalPrompts: allPromptsToday.length,
+                    avgCostPerPrompt: allPromptsToday.length > 0 ? dailyCost / allPromptsToday.length : 0,
+                    sessions: allSessionsToday,
+                    isToday: true // Marcador para identificarlo
+                };
+
+                // Agregar al inicio (día más reciente)
+                allDays.unshift(todayData);
+            }
+
+            // Calcular estadísticas semanales (usando allDays que incluye hoy)
+            const totalWeeklyCost = allDays.reduce((sum, day) => sum + day.totalCost, 0);
+            const totalWeeklyPrompts = allDays.reduce((sum, day) => sum + day.totalPrompts, 0);
+            const avgDailyCost = totalWeeklyCost / allDays.length;
+            const avgDailyPrompts = totalWeeklyPrompts / allDays.length;
 
             // Calcular promedios
             let totalAvgUsagePerPrompt = 0;
@@ -817,7 +853,7 @@
             let totalMinutesPerPrompt = 0;
             let daysWithData = 0;
 
-            dailyHistory.forEach(day => {
+            allDays.forEach(day => {
                 if (day.totalPrompts > 0) {
                     const totalUsageDay = day.sessions.reduce((sum, s) => sum + s.totalUsage, 0);
                     const avgUsage = totalUsageDay / day.totalPrompts;
@@ -837,17 +873,18 @@
             const weeklyAvgMinutesPerPrompt = daysWithData > 0 ? totalMinutesPerPrompt / daysWithData : 0;
 
             // Datos para gráficos semanales
-            const dailyCosts = dailyHistory.map(d => d.totalCost).reverse();
-            const dailyPrompts = dailyHistory.map(d => d.totalPrompts).reverse();
-            const dailyAvgCost = dailyHistory.map(d => d.avgCostPerPrompt).reverse();
-            const dailyAvgUsage = dailyHistory.map(d => {
+            const dailyCosts = allDays.map(d => d.totalCost).reverse();
+            const dailyPrompts = allDays.map(d => d.totalPrompts).reverse();
+            const dailyAvgCost = allDays.map(d => d.avgCostPerPrompt).reverse();
+            const dailyAvgUsage = allDays.map(d => {
                 const totalUsage = d.sessions.reduce((sum, s) => sum + s.totalUsage, 0);
                 return d.totalPrompts > 0 ? totalUsage / d.totalPrompts : 0;
             }).reverse();
 
-            const dayLabels = dailyHistory.map((d, i) => {
+            const dayLabels = allDays.map((d, i) => {
                 const date = new Date(d.date);
-                return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+                const label = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+                return d.isToday ? 'Hoy' : label;
             }).reverse();
 
             let html = `
@@ -882,7 +919,7 @@
                     </div>
                     <div class="mini-stat">
                         <div class="mini-stat-label">Días Registrados</div>
-                        <div class="mini-stat-value">${dailyHistory.length}</div>
+                        <div class="mini-stat-value">${allDays.length}</div>
                     </div>
                 </div>
 
@@ -910,15 +947,17 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
             `;
 
-            dailyHistory.forEach(day => {
+            allDays.forEach(day => {
                 const date = new Date(day.date);
-                const dayName = date.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                const dayName = day.isToday ? '🔵 HOY' : date.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
                 const totalUsageDay = day.sessions.reduce((sum, s) => sum + s.totalUsage, 0);
                 const avgUsageDay = day.totalPrompts > 0 ? totalUsageDay / day.totalPrompts : 0;
+                const borderColor = day.isToday ? '#2ecc71' : '#667eea';
+                const bgColor = day.isToday ? '#e8f8f0' : '#f8f9ff';
 
                 html += `
-                    <div style="background: #f8f9ff; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
-                        <h4 style="color: #667eea; margin-bottom: 10px;">${dayName} <span class="session-badge">${day.sessions.length} sesiones</span></h4>
+                    <div style="background: ${bgColor}; padding: 20px; border-radius: 10px; border-left: 4px solid ${borderColor};">
+                        <h4 style="color: ${borderColor}; margin-bottom: 10px;">${dayName} <span class="session-badge">${day.sessions.length} sesiones</span></h4>
                         <div style="display: flex; justify-content: space-between; margin: 5px 0; color: #666;">
                             <span>Coste Total:</span>
                             <strong style="color: #333;">${day.totalCost.toFixed(2)}€</strong>
