@@ -441,7 +441,7 @@
             <div class="stat-card">
                 <h3>Coste Diario Total</h3>
                 <div class="stat-value" id="totalCost">0.00€</div>
-                <div class="stat-label">de 4.10€/día (8h)</div>
+                <div class="stat-label">de 4.00€</div>
             </div>
 
             <div class="stat-card">
@@ -472,6 +472,12 @@
                 <h3>Minutos/Prompt</h3>
                 <div class="stat-value" id="minutesPerPrompt">0</div>
                 <div class="stat-label">disponible cada</div>
+            </div>
+
+            <div class="stat-card">
+                <h3>Precio por Petición</h3>
+                <div class="stat-value" id="pricePerRequest">0.00€</div>
+                <div class="stat-label">coste medio</div>
             </div>
         </div>
 
@@ -545,12 +551,9 @@
     </div>
 
     <script>
-        // Configuración: 4.1€/día para 8h de uso, el uso se mide en sesiones de 5h
-        const COST_PER_DAY = 4.1;
-        const COST_PER_HOUR = 0.5;
-        const HOURS_PER_DAY = 8;
-        const USAGE_HOURS = 5;
-        const COST_PER_PERCENT = COST_PER_HOUR / 100;
+        const TOTAL_HOURS = 10; // 2 sesiones de 5h
+        const TOTAL_COST = 4.0; // Coste diario
+        const COST_PER_PERCENT = TOTAL_COST / 100;
 
         // Estado actual
         let currentSessionNumber = parseInt(localStorage.getItem('currentSessionNumber')) || 1;
@@ -586,7 +589,8 @@
             let avgPerPrompt = 0;
             let avgCostPerPrompt = 0;
             let promptsPerHour = 0;
-            let minutesPerPrompt = 0;
+            let timeBetweenPrompts = 0;
+            let pricePerRequest = 0;
 
             if (totalPromptsCurrentSession > 0) {
                 avgPerPrompt = totalUsageCurrentSession / totalPromptsCurrentSession;
@@ -596,6 +600,10 @@
                     promptsPerHour = Math.floor(totalPromptsIn5h / 5);
                     minutesPerPrompt = (300 / totalPromptsIn5h).toFixed(1);
                 }
+
+                // Fórmula: (4 * porcentajeActualUsado) / peticionesHechas
+                // donde porcentajeActualUsado es la fracción (totalUsage/100)
+                pricePerRequest = (4 * totalUsage) / (totalPrompts * 100);
             }
 
             if (totalPromptsToday > 0) {
@@ -608,7 +616,8 @@
             document.getElementById('totalPrompts').textContent = totalPromptsToday;
             document.getElementById('avgPerPrompt').textContent = avgPerPrompt.toFixed(2) + '%';
             document.getElementById('promptsPerHour').textContent = promptsPerHour;
-            document.getElementById('minutesPerPrompt').textContent = minutesPerPrompt;
+            document.getElementById('timeBetweenPrompts').textContent = timeBetweenPrompts;
+            document.getElementById('pricePerRequest').textContent = pricePerRequest.toFixed(4) + '€';
 
             document.getElementById('sessionIndicator').textContent = `Sesión ${currentSessionNumber} de 2`;
 
