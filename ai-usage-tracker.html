@@ -591,8 +591,10 @@
             if (totalPromptsCurrentSession > 0) {
                 avgPerPrompt = totalUsageCurrentSession / totalPromptsCurrentSession;
                 if (avgPerPrompt > 0) {
-                    promptsPerHour = Math.floor(100 / avgPerPrompt);
-                    minutesPerPrompt = (60 / promptsPerHour).toFixed(1);
+                    // Basado en 5h (300 min): si uso medio es X%, puedes hacer 100/X prompts en 5h
+                    const totalPromptsIn5h = 100 / avgPerPrompt;
+                    promptsPerHour = Math.floor(totalPromptsIn5h / 5);
+                    minutesPerPrompt = (300 / totalPromptsIn5h).toFixed(1);
                 }
             }
 
@@ -660,18 +662,20 @@
             const chartId = 'chart-' + Math.random().toString(36).substr(2, 9);
             const width = 600;
             const height = 250;
-            const padding = 50;
+            const padding = 60; // Aumentado para dar espacio a las etiquetas
 
             const maxValue = Math.max(...data, 1);
             const minValue = Math.min(...data, 0);
             const range = maxValue - minValue || 1;
 
+            // Calcular posiciones de los puntos
             const points = data.map((value, index) => {
                 const x = padding + (index / (data.length - 1 || 1)) * (width - 2 * padding);
                 const y = height - padding - ((value - minValue) / range) * (height - 2 * padding);
                 return `${x},${y}`;
             }).join(' ');
 
+            // Puntos interactivos
             const circles = data.map((value, index) => {
                 const x = padding + (index / (data.length - 1 || 1)) * (width - 2 * padding);
                 const y = height - padding - ((value - minValue) / range) * (height - 2 * padding);
@@ -682,9 +686,51 @@
                     onmouseout="hideTooltip()" />`;
             }).join('');
 
+            // Eje Y - etiquetas
+            const yAxisLabels = [];
+            const numYTicks = 5;
+            for (let i = 0; i <= numYTicks; i++) {
+                const value = minValue + (range * i / numYTicks);
+                const y = height - padding - (i / numYTicks) * (height - 2 * padding);
+                yAxisLabels.push(`
+                    <text x="${padding - 10}" y="${y}" text-anchor="end" font-size="10" fill="#666" dominant-baseline="middle">
+                        ${value.toFixed(1)}${suffix}
+                    </text>
+                    <line x1="${padding - 5}" y1="${y}" x2="${padding}" y2="${y}" stroke="#999" stroke-width="1" />
+                `);
+            }
+
+            // Eje X - etiquetas (mostramos algunas etiquetas seleccionadas)
+            const xAxisLabels = [];
+            const numXTicks = Math.min(data.length, 5); // Máximo 5 etiquetas
+            const xStep = Math.floor((data.length - 1) / (numXTicks - 1 || 1)) || 1;
+            for (let i = 0; i < data.length; i += xStep) {
+                const x = padding + (i / (data.length - 1 || 1)) * (width - 2 * padding);
+                const label = labels && labels[i] ? labels[i] : i + 1;
+                xAxisLabels.push(`
+                    <text x="${x}" y="${height - padding + 20}" text-anchor="middle" font-size="10" fill="#666">
+                        ${label}
+                    </text>
+                    <line x1="${x}" y1="${height - padding}" x2="${x}" y2="${height - padding + 5}" stroke="#999" stroke-width="1" />
+                `);
+            }
+
             return `
-                <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-height: 300px;">
+                <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-height: 200px;">
+                    <!-- Ejes -->
+                    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#999" stroke-width="2" />
+                    <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="#999" stroke-width="2" />
+
+                    <!-- Etiquetas eje Y -->
+                    ${yAxisLabels.join('')}
+
+                    <!-- Etiquetas eje X -->
+                    ${xAxisLabels.join('')}
+
+                    <!-- Línea de datos -->
                     <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.5" />
+
+                    <!-- Puntos interactivos -->
                     ${circles}
                 </svg>
             `;
@@ -735,8 +781,10 @@
             const totalPromptsToday = allPromptsToday.length;
             const avgUsagePerPrompt = totalUsageToday / totalPromptsToday;
             const avgCostPerPrompt = totalCostToday / totalPromptsToday;
-            const promptsPerHour = avgUsagePerPrompt > 0 ? Math.floor(100 / avgUsagePerPrompt) : 0;
-            const minutesPerPrompt = promptsPerHour > 0 ? (60 / promptsPerHour).toFixed(1) : 0;
+            // Basado en 5h (300 min): si uso medio es X%, puedes hacer 100/X prompts en 5h
+            const totalPromptsIn5h = avgUsagePerPrompt > 0 ? 100 / avgUsagePerPrompt : 0;
+            const promptsPerHour = avgUsagePerPrompt > 0 ? Math.floor(totalPromptsIn5h / 5) : 0;
+            const minutesPerPrompt = totalPromptsIn5h > 0 ? (300 / totalPromptsIn5h).toFixed(1) : 0;
 
             // Datos para gráficos (evolución temporal)
             const usageOverTime = [];
@@ -875,9 +923,11 @@
                     totalAvgUsagePerPrompt += avgUsage;
 
                     if (avgUsage > 0) {
-                        const pph = 100 / avgUsage;
+                        // Basado en 5h (300 min): si uso medio es X%, puedes hacer 100/X prompts en 5h
+                        const totalPromptsIn5h = 100 / avgUsage;
+                        const pph = totalPromptsIn5h / 5;
                         totalPromptsPerHour += pph;
-                        totalMinutesPerPrompt += (60 / pph);
+                        totalMinutesPerPrompt += (300 / totalPromptsIn5h);
                     }
                     daysWithData++;
                 }
