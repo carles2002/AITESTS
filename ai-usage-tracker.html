@@ -303,7 +303,7 @@
     <div class="container">
         <header>
             <h1>AI Usage Tracker</h1>
-            <p class="subtitle">Monitor de Consumo de Modelo IA - 5h (4.5€)</p>
+            <p class="subtitle">Monitor de Consumo de Modelo IA - Día completo (2 sesiones × 5h = 4€)</p>
         </header>
 
         <div id="alertContainer"></div>
@@ -320,7 +320,7 @@
             <div class="stat-card">
                 <h3>Coste Total</h3>
                 <div class="stat-value" id="totalCost">0.00€</div>
-                <div class="stat-label">de 4.50€</div>
+                <div class="stat-label">de 4.00€</div>
             </div>
 
             <div class="stat-card">
@@ -345,6 +345,12 @@
                 <h3>Tiempo entre Prompts</h3>
                 <div class="stat-value" id="timeBetweenPrompts">0</div>
                 <div class="stat-label">minutos</div>
+            </div>
+
+            <div class="stat-card">
+                <h3>Precio por Petición</h3>
+                <div class="stat-value" id="pricePerRequest">0.00€</div>
+                <div class="stat-label">coste medio</div>
             </div>
         </div>
 
@@ -401,8 +407,8 @@
     </div>
 
     <script>
-        const TOTAL_HOURS = 5;
-        const TOTAL_COST = 4.5;
+        const TOTAL_HOURS = 10; // 2 sesiones de 5h
+        const TOTAL_COST = 4.0; // Coste diario
         const COST_PER_PERCENT = TOTAL_COST / 100;
 
         let prompts = JSON.parse(localStorage.getItem('prompts')) || [];
@@ -428,6 +434,7 @@
             let avgPerPrompt = 0;
             let promptsPerHour = 0;
             let timeBetweenPrompts = 0;
+            let pricePerRequest = 0;
 
             if (totalPrompts > 0) {
                 avgPerPrompt = totalUsage / totalPrompts;
@@ -436,6 +443,10 @@
                     promptsPerHour = Math.floor(100 / avgPerPrompt);
                     timeBetweenPrompts = (60 / promptsPerHour).toFixed(1);
                 }
+
+                // Fórmula: (4 * porcentajeActualUsado) / peticionesHechas
+                // donde porcentajeActualUsado es la fracción (totalUsage/100)
+                pricePerRequest = (4 * totalUsage) / (totalPrompts * 100);
             }
 
             document.getElementById('totalUsage').textContent = totalUsage.toFixed(2) + '%';
@@ -444,6 +455,7 @@
             document.getElementById('avgPerPrompt').textContent = avgPerPrompt.toFixed(2) + '%';
             document.getElementById('promptsPerHour').textContent = promptsPerHour;
             document.getElementById('timeBetweenPrompts').textContent = timeBetweenPrompts;
+            document.getElementById('pricePerRequest').textContent = pricePerRequest.toFixed(4) + '€';
 
             const progressBar = document.getElementById('progressBar');
             progressBar.style.width = Math.min(totalUsage, 100) + '%';
