@@ -348,6 +348,65 @@
             </div>
         </div>
 
+        <div class="input-section" style="margin-bottom: 30px;">
+            <h2 style="color: #667eea; margin-bottom: 20px;">Consumo por Modelo</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                <div class="model-stat">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="color: #667eea; margin: 0; display: flex; align-items: center;">
+                            <span style="display: inline-block; width: 12px; height: 12px; background: #667eea; border-radius: 50%; margin-right: 8px;"></span>
+                            Sonnet
+                        </h3>
+                        <span style="font-weight: bold; color: #333;">
+                            <span id="sonnetUsage">0.00%</span> (<span id="sonnetCost">0.00€</span>)
+                        </span>
+                    </div>
+                    <div class="progress-bar" style="height: 25px;">
+                        <div id="sonnetBar" class="progress-fill" style="width: 0%; background: #667eea; font-size: 0.85em;">0%</div>
+                    </div>
+                    <div style="margin-top: 8px; color: #666; font-size: 0.9em;">
+                        <span id="sonnetCount">0</span> prompts
+                    </div>
+                </div>
+
+                <div class="model-stat">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="color: #48dbfb; margin: 0; display: flex; align-items: center;">
+                            <span style="display: inline-block; width: 12px; height: 12px; background: #48dbfb; border-radius: 50%; margin-right: 8px;"></span>
+                            Haiku
+                        </h3>
+                        <span style="font-weight: bold; color: #333;">
+                            <span id="haikuUsage">0.00%</span> (<span id="haikuCost">0.00€</span>)
+                        </span>
+                    </div>
+                    <div class="progress-bar" style="height: 25px;">
+                        <div id="haikuBar" class="progress-fill" style="width: 0%; background: #48dbfb; font-size: 0.85em;">0%</div>
+                    </div>
+                    <div style="margin-top: 8px; color: #666; font-size: 0.9em;">
+                        <span id="haikuCount">0</span> prompts
+                    </div>
+                </div>
+
+                <div class="model-stat">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="color: #ff6b6b; margin: 0; display: flex; align-items: center;">
+                            <span style="display: inline-block; width: 12px; height: 12px; background: #ff6b6b; border-radius: 50%; margin-right: 8px;"></span>
+                            Opus
+                        </h3>
+                        <span style="font-weight: bold; color: #333;">
+                            <span id="opusUsage">0.00%</span> (<span id="opusCost">0.00€</span>)
+                        </span>
+                    </div>
+                    <div class="progress-bar" style="height: 25px;">
+                        <div id="opusBar" class="progress-fill" style="width: 0%; background: #ff6b6b; font-size: 0.85em;">0%</div>
+                    </div>
+                    <div style="margin-top: 8px; color: #666; font-size: 0.9em;">
+                        <span id="opusCount">0</span> prompts
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="input-section">
             <h2 style="color: #667eea; margin-bottom: 20px;">Registrar Nuevo Prompt</h2>
             <form id="promptForm">
@@ -362,6 +421,23 @@
                         placeholder="Ej: 15.5"
                         required
                     >
+                </div>
+                <div class="form-group">
+                    <label>Modelo Utilizado:</label>
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; cursor: pointer; color: #333; font-weight: normal;">
+                            <input type="radio" name="model" value="Sonnet" checked style="margin-right: 8px; cursor: pointer; width: auto;">
+                            Sonnet
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer; color: #333; font-weight: normal;">
+                            <input type="radio" name="model" value="Haiku" style="margin-right: 8px; cursor: pointer; width: auto;">
+                            Haiku
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer; color: #333; font-weight: normal;">
+                            <input type="radio" name="model" value="Opus" style="margin-right: 8px; cursor: pointer; width: auto;">
+                            Opus
+                        </label>
+                    </div>
                 </div>
                 <div class="btn-group">
                     <button type="submit" class="btn-primary">Registrar Prompt</button>
@@ -379,6 +455,7 @@
                         <tr>
                             <th>#</th>
                             <th>Fecha/Hora</th>
+                            <th>Modelo</th>
                             <th>Uso Acumulado</th>
                             <th>Consumo Prompt</th>
                             <th>Coste Prompt</th>
@@ -387,7 +464,7 @@
                     </thead>
                     <tbody id="historyBody">
                         <tr>
-                            <td colspan="6" class="empty-state">
+                            <td colspan="7" class="empty-state">
                                 <div>
                                     <p style="font-size: 1.2em;">No hay prompts registrados</p>
                                     <p>Introduce el porcentaje de uso actual para comenzar</p>
@@ -454,6 +531,43 @@
             } else if (totalUsage > 70) {
                 progressBar.style.background = 'linear-gradient(90deg, #ffa502 0%, #ff6348 100%)';
             }
+
+            // Calcular estadísticas por modelo
+            updateModelStats();
+        }
+
+        function updateModelStats() {
+            const modelStats = {
+                'Sonnet': { usage: 0, cost: 0, count: 0 },
+                'Haiku': { usage: 0, cost: 0, count: 0 },
+                'Opus': { usage: 0, cost: 0, count: 0 }
+            };
+
+            // Calcular totales por modelo
+            prompts.forEach(prompt => {
+                const model = prompt.model || 'N/A';
+                if (modelStats[model]) {
+                    modelStats[model].usage += prompt.consumed;
+                    modelStats[model].cost += prompt.cost;
+                    modelStats[model].count += 1;
+                }
+            });
+
+            // Actualizar UI para cada modelo
+            const models = ['Sonnet', 'Haiku', 'Opus'];
+            models.forEach(model => {
+                const stats = modelStats[model];
+                const modelLower = model.toLowerCase();
+
+                document.getElementById(`${modelLower}Usage`).textContent = stats.usage.toFixed(2) + '%';
+                document.getElementById(`${modelLower}Cost`).textContent = stats.cost.toFixed(2) + '€';
+                document.getElementById(`${modelLower}Count`).textContent = stats.count;
+
+                const bar = document.getElementById(`${modelLower}Bar`);
+                const percentage = Math.min(stats.usage, 100);
+                bar.style.width = percentage + '%';
+                bar.textContent = stats.usage.toFixed(1) + '%';
+            });
         }
 
         function updateHistoryTable() {
@@ -462,7 +576,7 @@
             if (prompts.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="empty-state">
+                        <td colspan="7" class="empty-state">
                             <div>
                                 <p style="font-size: 1.2em;">No hay prompts registrados</p>
                                 <p>Introduce el porcentaje de uso actual para comenzar</p>
@@ -473,10 +587,20 @@
                 return;
             }
 
-            tbody.innerHTML = prompts.map((prompt, index) => `
+            tbody.innerHTML = prompts.map((prompt, index) => {
+                const modelBadgeColor = {
+                    'Sonnet': '#667eea',
+                    'Haiku': '#48dbfb',
+                    'Opus': '#ff6b6b'
+                };
+                const model = prompt.model || 'N/A';
+                const badgeColor = modelBadgeColor[model] || '#999';
+
+                return `
                 <tr>
                     <td>${index + 1}</td>
                     <td>${new Date(prompt.timestamp).toLocaleString('es-ES')}</td>
+                    <td><span style="background: ${badgeColor}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: bold;">${model}</span></td>
                     <td><strong>${prompt.usage.toFixed(2)}%</strong></td>
                     <td>${prompt.consumed.toFixed(2)}%</td>
                     <td>${prompt.cost.toFixed(3)}€</td>
@@ -484,7 +608,8 @@
                         <button class="delete-btn" onclick="deletePrompt(${index})">Eliminar</button>
                     </td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function deletePrompt(index) {
@@ -510,6 +635,7 @@
             e.preventDefault();
 
             const currentUsage = parseFloat(document.getElementById('currentUsage').value);
+            const selectedModel = document.querySelector('input[name="model"]:checked').value;
 
             if (isNaN(currentUsage) || currentUsage < 0 || currentUsage > 100) {
                 showAlert('Por favor, introduce un porcentaje válido entre 0 y 100', 'danger');
@@ -528,7 +654,8 @@
                 timestamp: new Date().toISOString(),
                 usage: currentUsage,
                 consumed: consumed,
-                cost: cost
+                cost: cost,
+                model: selectedModel
             };
 
             prompts.push(newPrompt);
@@ -540,7 +667,7 @@
 
             document.getElementById('currentUsage').value = '';
 
-            showAlert(`Prompt registrado: ${consumed.toFixed(2)}% consumido (${cost.toFixed(3)}€)`, 'success');
+            showAlert(`Prompt registrado (${selectedModel}): ${consumed.toFixed(2)}% consumido (${cost.toFixed(3)}€)`, 'success');
         });
 
         function saveData() {
