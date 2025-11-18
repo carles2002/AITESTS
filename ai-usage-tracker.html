@@ -297,6 +297,45 @@
         .delete-btn:hover {
             background: #ff3838;
         }
+
+        select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1.1em;
+            transition: border-color 0.3s ease;
+            background: white;
+            cursor: pointer;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .model-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+
+        .model-sonnet {
+            background: #667eea;
+            color: white;
+        }
+
+        .model-haiku {
+            background: #10ac84;
+            color: white;
+        }
+
+        .model-opus {
+            background: #ff6348;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -346,11 +385,38 @@
                 <div class="stat-value" id="timeBetweenPrompts">0</div>
                 <div class="stat-label">minutos</div>
             </div>
+
+            <div class="stat-card">
+                <h3>🔵 Sonnet</h3>
+                <div class="stat-value" id="sonnetUsage">0.00%</div>
+                <div class="stat-label"><span id="sonnetCost">0.00€</span> · <span id="sonnetCount">0</span> prompts</div>
+            </div>
+
+            <div class="stat-card">
+                <h3>🟢 Haiku</h3>
+                <div class="stat-value" id="haikuUsage">0.00%</div>
+                <div class="stat-label"><span id="haikuCost">0.00€</span> · <span id="haikuCount">0</span> prompts</div>
+            </div>
+
+            <div class="stat-card">
+                <h3>🔴 Opus</h3>
+                <div class="stat-value" id="opusUsage">0.00%</div>
+                <div class="stat-label"><span id="opusCost">0.00€</span> · <span id="opusCount">0</span> prompts</div>
+            </div>
         </div>
 
         <div class="input-section">
             <h2 style="color: #667eea; margin-bottom: 20px;">Registrar Nuevo Prompt</h2>
             <form id="promptForm">
+                <div class="form-group">
+                    <label for="modelType">Tipo de Modelo:</label>
+                    <select id="modelType" required>
+                        <option value="">Selecciona un modelo...</option>
+                        <option value="Sonnet">Sonnet</option>
+                        <option value="Haiku">Haiku</option>
+                        <option value="Opus">Opus</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label for="currentUsage">Porcentaje de Uso Actual (%):</label>
                     <input
@@ -378,6 +444,7 @@
                     <thead>
                         <tr>
                             <th>#</th>
+                            <th>Modelo</th>
                             <th>Fecha/Hora</th>
                             <th>Uso Acumulado</th>
                             <th>Consumo Prompt</th>
@@ -387,7 +454,7 @@
                     </thead>
                     <tbody id="historyBody">
                         <tr>
-                            <td colspan="6" class="empty-state">
+                            <td colspan="7" class="empty-state">
                                 <div>
                                     <p style="font-size: 1.2em;">No hay prompts registrados</p>
                                     <p>Introduce el porcentaje de uso actual para comenzar</p>
@@ -438,12 +505,43 @@
                 }
             }
 
+            // Calcular estadísticas por modelo
+            const modelStats = {
+                Sonnet: { consumed: 0, cost: 0, count: 0 },
+                Haiku: { consumed: 0, cost: 0, count: 0 },
+                Opus: { consumed: 0, cost: 0, count: 0 }
+            };
+
+            prompts.forEach(prompt => {
+                const model = prompt.model || 'Sonnet';
+                if (modelStats[model]) {
+                    modelStats[model].consumed += prompt.consumed;
+                    modelStats[model].cost += prompt.cost;
+                    modelStats[model].count += 1;
+                }
+            });
+
             document.getElementById('totalUsage').textContent = totalUsage.toFixed(2) + '%';
             document.getElementById('totalCost').textContent = totalCost.toFixed(2) + '€';
             document.getElementById('totalPrompts').textContent = totalPrompts;
             document.getElementById('avgPerPrompt').textContent = avgPerPrompt.toFixed(2) + '%';
             document.getElementById('promptsPerHour').textContent = promptsPerHour;
             document.getElementById('timeBetweenPrompts').textContent = timeBetweenPrompts;
+
+            // Actualizar estadísticas de Sonnet
+            document.getElementById('sonnetUsage').textContent = modelStats.Sonnet.consumed.toFixed(2) + '%';
+            document.getElementById('sonnetCost').textContent = modelStats.Sonnet.cost.toFixed(2) + '€';
+            document.getElementById('sonnetCount').textContent = modelStats.Sonnet.count;
+
+            // Actualizar estadísticas de Haiku
+            document.getElementById('haikuUsage').textContent = modelStats.Haiku.consumed.toFixed(2) + '%';
+            document.getElementById('haikuCost').textContent = modelStats.Haiku.cost.toFixed(2) + '€';
+            document.getElementById('haikuCount').textContent = modelStats.Haiku.count;
+
+            // Actualizar estadísticas de Opus
+            document.getElementById('opusUsage').textContent = modelStats.Opus.consumed.toFixed(2) + '%';
+            document.getElementById('opusCost').textContent = modelStats.Opus.cost.toFixed(2) + '€';
+            document.getElementById('opusCount').textContent = modelStats.Opus.count;
 
             const progressBar = document.getElementById('progressBar');
             progressBar.style.width = Math.min(totalUsage, 100) + '%';
@@ -462,7 +560,7 @@
             if (prompts.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="empty-state">
+                        <td colspan="7" class="empty-state">
                             <div>
                                 <p style="font-size: 1.2em;">No hay prompts registrados</p>
                                 <p>Introduce el porcentaje de uso actual para comenzar</p>
@@ -473,18 +571,23 @@
                 return;
             }
 
-            tbody.innerHTML = prompts.map((prompt, index) => `
-                <tr>
-                    <td>${index + 1}</td>
-                    <td>${new Date(prompt.timestamp).toLocaleString('es-ES')}</td>
-                    <td><strong>${prompt.usage.toFixed(2)}%</strong></td>
-                    <td>${prompt.consumed.toFixed(2)}%</td>
-                    <td>${prompt.cost.toFixed(3)}€</td>
-                    <td>
-                        <button class="delete-btn" onclick="deletePrompt(${index})">Eliminar</button>
-                    </td>
-                </tr>
-            `).join('');
+            tbody.innerHTML = prompts.map((prompt, index) => {
+                const modelClass = prompt.model ? `model-${prompt.model.toLowerCase()}` : 'model-sonnet';
+                const modelText = prompt.model || 'N/A';
+                return `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td><span class="model-badge ${modelClass}">${modelText}</span></td>
+                        <td>${new Date(prompt.timestamp).toLocaleString('es-ES')}</td>
+                        <td><strong>${prompt.usage.toFixed(2)}%</strong></td>
+                        <td>${prompt.consumed.toFixed(2)}%</td>
+                        <td>${prompt.cost.toFixed(3)}€</td>
+                        <td>
+                            <button class="delete-btn" onclick="deletePrompt(${index})">Eliminar</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
 
         function deletePrompt(index) {
@@ -509,7 +612,13 @@
         document.getElementById('promptForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
+            const modelType = document.getElementById('modelType').value;
             const currentUsage = parseFloat(document.getElementById('currentUsage').value);
+
+            if (!modelType) {
+                showAlert('Por favor, selecciona un tipo de modelo', 'danger');
+                return;
+            }
 
             if (isNaN(currentUsage) || currentUsage < 0 || currentUsage > 100) {
                 showAlert('Por favor, introduce un porcentaje válido entre 0 y 100', 'danger');
@@ -526,6 +635,7 @@
 
             const newPrompt = {
                 timestamp: new Date().toISOString(),
+                model: modelType,
                 usage: currentUsage,
                 consumed: consumed,
                 cost: cost
@@ -538,9 +648,10 @@
             updateDashboard();
             updateHistoryTable();
 
+            document.getElementById('modelType').value = '';
             document.getElementById('currentUsage').value = '';
 
-            showAlert(`Prompt registrado: ${consumed.toFixed(2)}% consumido (${cost.toFixed(3)}€)`, 'success');
+            showAlert(`Prompt registrado (${modelType}): ${consumed.toFixed(2)}% consumido (${cost.toFixed(3)}€)`, 'success');
         });
 
         function saveData() {
