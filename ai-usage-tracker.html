@@ -417,6 +417,90 @@
             font-weight: bold;
             color: #333;
         }
+
+        .edit-dates-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+
+        .edit-dates-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+
+        .session-edit-card {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            margin-bottom: 15px;
+        }
+
+        .session-edit-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .session-edit-title {
+            color: #667eea;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .date-input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .date-input-group label {
+            margin: 0;
+            font-size: 0.9em;
+        }
+
+        .date-input-group input[type="datetime-local"] {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 0.95em;
+        }
+
+        .date-input-group input[type="datetime-local"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-update {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .btn-update:hover {
+            background: #5568d3;
+        }
+
+        .prompt-list {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 0.9em;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -550,6 +634,13 @@
                 </button>
             </div>
             <div id="weeklyStatsContent"></div>
+        </div>
+
+        <!-- Sección para Editar Fechas de Sesiones -->
+        <div class="edit-dates-section" id="editDatesSection">
+            <h2>📅 Editar Fechas de Sesiones</h2>
+            <p style="color: #666; margin-bottom: 20px;">Modifica las fechas de las sesiones registradas. Los cambios se aplicarán a todos los prompts de la sesión.</p>
+            <div id="editDatesContent"></div>
         </div>
     </div>
 
@@ -1246,6 +1337,234 @@
             content.innerHTML = html;
         }
 
+        function updateEditDatesSection() {
+            const content = document.getElementById('editDatesContent');
+
+            // Recolectar todas las sesiones editables
+            let allEditableSessions = [];
+
+            // 1. Sesiones del historial diario
+            dailyHistory.forEach((day, dayIndex) => {
+                day.sessions.forEach((session, sessionIndex) => {
+                    allEditableSessions.push({
+                        type: 'history',
+                        dayIndex: dayIndex,
+                        sessionIndex: sessionIndex,
+                        date: day.date,
+                        session: session
+                    });
+                });
+            });
+
+            // 2. Sesiones completadas del día actual
+            completedSessions.forEach((session, sessionIndex) => {
+                allEditableSessions.push({
+                    type: 'completed',
+                    sessionIndex: sessionIndex,
+                    date: new Date().toISOString().split('T')[0],
+                    session: session
+                });
+            });
+
+            // 3. Sesión actual (si tiene prompts)
+            if (currentSessionPrompts.length > 0) {
+                allEditableSessions.push({
+                    type: 'current',
+                    date: new Date().toISOString().split('T')[0],
+                    session: {
+                        sessionNumber: currentSessionNumber,
+                        prompts: currentSessionPrompts,
+                        totalUsage: lastUsage
+                    }
+                });
+            }
+
+            // Si no hay sesiones para editar
+            if (allEditableSessions.length === 0) {
+                content.innerHTML = '<div class="empty-state"><p>No hay sesiones registradas para editar</p></div>';
+                return;
+            }
+
+            // Renderizar las sesiones editables
+            let html = '';
+
+            allEditableSessions.forEach((item, index) => {
+                const session = item.session;
+                const firstPromptDate = new Date(session.prompts[0].timestamp);
+                const lastPromptDate = new Date(session.prompts[session.prompts.length - 1].timestamp);
+
+                // Formatear fecha para el input datetime-local (YYYY-MM-DDTHH:MM)
+                const formatDateForInput = (date) => {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const hours = String(date.getHours()).padStart(2, '0');
+                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                    return `${year}-${month}-${day}T${hours}:${minutes}`;
+                };
+
+                const dateInputValue = formatDateForInput(firstPromptDate);
+
+                let sessionLabel = '';
+                if (item.type === 'history') {
+                    sessionLabel = `Historial - ${new Date(item.date).toLocaleDateString('es-ES')} - Sesión ${session.sessionNumber}`;
+                } else if (item.type === 'completed') {
+                    sessionLabel = `Hoy (Completada) - Sesión ${session.sessionNumber}`;
+                } else {
+                    sessionLabel = `Hoy (Actual) - Sesión ${session.sessionNumber}`;
+                }
+
+                html += `
+                    <div class="session-edit-card">
+                        <div class="session-edit-header">
+                            <div class="session-edit-title">${sessionLabel}</div>
+                            <div class="date-input-group">
+                                <label>Nueva fecha:</label>
+                                <input
+                                    type="datetime-local"
+                                    id="dateInput_${index}"
+                                    value="${dateInputValue}"
+                                >
+                                <button class="btn-update" onclick="updateSessionDate(${index}, '${item.type}', ${item.dayIndex || 'null'}, ${item.sessionIndex || 'null'})">
+                                    Actualizar
+                                </button>
+                            </div>
+                        </div>
+                        <div class="prompt-list">
+                            <strong>${session.prompts.length} prompts</strong>
+                            | Uso total: ${session.totalUsage.toFixed(2)}%
+                            | Periodo: ${firstPromptDate.toLocaleString('es-ES')} - ${lastPromptDate.toLocaleString('es-ES')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            content.innerHTML = html;
+        }
+
+        function updateSessionDate(index, type, dayIndex, sessionIndex) {
+            const dateInput = document.getElementById(`dateInput_${index}`);
+            const newDateStr = dateInput.value;
+
+            if (!newDateStr) {
+                showAlert('Por favor, selecciona una fecha válida', 'warning');
+                return;
+            }
+
+            const newDate = new Date(newDateStr);
+            const newDateOnly = newDate.toISOString().split('T')[0];
+
+            // Función auxiliar para actualizar timestamps de una sesión
+            const updateSessionTimestamps = (session, baseDate) => {
+                session.prompts.forEach((prompt, i) => {
+                    const originalDate = new Date(prompt.timestamp);
+                    const updatedDate = new Date(baseDate);
+
+                    // Mantener el offset de tiempo relativo entre prompts
+                    if (i > 0) {
+                        const prevOriginalDate = new Date(session.prompts[0].timestamp);
+                        const timeDiff = originalDate - prevOriginalDate;
+                        updatedDate.setTime(baseDate.getTime() + timeDiff);
+                    }
+
+                    prompt.timestamp = updatedDate.toISOString();
+                });
+
+                // Actualizar startTime y endTime si existen
+                if (session.startTime) {
+                    session.startTime = session.prompts[0].timestamp;
+                }
+                if (session.endTime) {
+                    session.endTime = session.prompts[session.prompts.length - 1].timestamp;
+                }
+
+                return session;
+            };
+
+            // Actualizar según el tipo de sesión
+            if (type === 'history') {
+                const day = dailyHistory[dayIndex];
+                const session = day.sessions[sessionIndex];
+
+                // Actualizar la sesión
+                updateSessionTimestamps(session, newDate);
+
+                // Si la fecha cambió a otro día, mover la sesión
+                if (newDateOnly !== day.date) {
+                    // Buscar si ya existe un día con esa fecha
+                    let targetDayIndex = dailyHistory.findIndex(d => d.date === newDateOnly);
+
+                    if (targetDayIndex === -1) {
+                        // Crear nuevo día
+                        const newDay = {
+                            date: newDateOnly,
+                            totalCost: session.prompts.reduce((sum, p) => sum + p.cost, 0),
+                            totalPrompts: session.prompts.length,
+                            avgCostPerPrompt: session.prompts.reduce((sum, p) => sum + p.cost, 0) / session.prompts.length,
+                            sessions: [session]
+                        };
+                        dailyHistory.unshift(newDay);
+                        if (dailyHistory.length > 7) {
+                            dailyHistory = dailyHistory.slice(0, 7);
+                        }
+                    } else {
+                        // Agregar a día existente
+                        dailyHistory[targetDayIndex].sessions.push(session);
+                        // Recalcular totales
+                        let allPrompts = [];
+                        dailyHistory[targetDayIndex].sessions.forEach(s => {
+                            allPrompts = allPrompts.concat(s.prompts);
+                        });
+                        dailyHistory[targetDayIndex].totalCost = allPrompts.reduce((sum, p) => sum + p.cost, 0);
+                        dailyHistory[targetDayIndex].totalPrompts = allPrompts.length;
+                        dailyHistory[targetDayIndex].avgCostPerPrompt = dailyHistory[targetDayIndex].totalCost / allPrompts.length;
+                    }
+
+                    // Eliminar del día original
+                    day.sessions.splice(sessionIndex, 1);
+
+                    // Si el día original quedó sin sesiones, eliminarlo
+                    if (day.sessions.length === 0) {
+                        dailyHistory.splice(dayIndex, 1);
+                    } else {
+                        // Recalcular totales del día original
+                        let allPrompts = [];
+                        day.sessions.forEach(s => {
+                            allPrompts = allPrompts.concat(s.prompts);
+                        });
+                        day.totalCost = allPrompts.reduce((sum, p) => sum + p.cost, 0);
+                        day.totalPrompts = allPrompts.length;
+                        day.avgCostPerPrompt = day.totalCost / allPrompts.length;
+                    }
+                }
+
+            } else if (type === 'completed') {
+                const session = completedSessions[sessionIndex];
+                updateSessionTimestamps(session, newDate);
+
+            } else if (type === 'current') {
+                // Actualizar timestamps de la sesión actual
+                currentSessionPrompts.forEach((prompt, i) => {
+                    const originalDate = new Date(prompt.timestamp);
+                    const updatedDate = new Date(newDate);
+
+                    if (i > 0) {
+                        const prevOriginalDate = new Date(currentSessionPrompts[0].timestamp);
+                        const timeDiff = originalDate - prevOriginalDate;
+                        updatedDate.setTime(newDate.getTime() + timeDiff);
+                    }
+
+                    prompt.timestamp = updatedDate.toISOString();
+                });
+            }
+
+            // Guardar cambios y actualizar interfaz
+            saveData();
+            updateAll();
+
+            showAlert('Fecha de sesión actualizada correctamente', 'success');
+        }
+
         function deletePrompt(index) {
             if (confirm('¿Estás seguro de que quieres eliminar este prompt?')) {
                 currentSessionPrompts.splice(index, 1);
@@ -1442,6 +1761,7 @@
             updateHistoryTable();
             updateTodayStats();
             updateWeeklyStats();
+            updateEditDatesSection();
         }
 
         // Inicializar la aplicación
