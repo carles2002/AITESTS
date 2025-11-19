@@ -739,7 +739,7 @@
                 // Redondear hacia arriba el uso medio por prompt
                 const avgPerPromptRoundedUp = Math.ceil(avgPerPrompt * 100) / 100;
                 if (avgPerPromptRoundedUp > 0 && usageRemaining > 0) {
-                    remainingPrompts = Math.floor(usageRemaining / avgPerPromptRoundedUp);
+                    remainingPrompts = usageRemaining / avgPerPromptRoundedUp;
                 }
 
                 // 2. Calcular hora de inicio de sesión (primer prompt - 10 minutos)
@@ -789,10 +789,11 @@
                             const promptsAtCurrentRate = currentRate * currentHourRemainingFraction;
 
                             // Pero también consideramos el ritmo sostenible para llegar al 95%
-                            const sustainableRate = totalHoursRemaining > 0 ? remainingPrompts / totalHoursRemaining : 0;
+                            const sustainableRatePerHour = totalHoursRemaining > 0 ? remainingPrompts / totalHoursRemaining : 0;
+                            const promptsAtSustainableRate = sustainableRatePerHour * currentHourRemainingFraction;
 
                             // Usamos el mínimo entre el ritmo actual y el sostenible
-                            promptsCurrentHourAdapted = Math.floor(Math.min(promptsAtCurrentRate, sustainableRate));
+                            promptsCurrentHourAdapted = Math.floor(Math.min(promptsAtCurrentRate, promptsAtSustainableRate));
                         }
                     }
                 } else {
@@ -809,7 +810,7 @@
             document.getElementById('minutesPerPrompt').textContent = minutesPerPrompt;
 
             // Actualizar nuevos campos
-            document.getElementById('remainingPrompts').textContent = remainingPrompts;
+            document.getElementById('remainingPrompts').textContent = remainingPrompts.toFixed(2);
             document.getElementById('sessionEndTime').textContent = sessionEndTime;
             document.getElementById('timeRemaining').textContent = timeRemaining;
             document.getElementById('promptsCurrentHour').textContent = `${promptsCurrentHourUniform} / ${promptsCurrentHourAdapted}`;
