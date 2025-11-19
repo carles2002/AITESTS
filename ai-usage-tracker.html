@@ -581,6 +581,12 @@
                 <div class="stat-value" id="promptsCurrentHour" style="font-size: 1.3em;">0 / 0</div>
                 <div class="stat-label">uniforme / ritmo actual</div>
             </div>
+
+            <div class="stat-card">
+                <h3>Prompts Proyectadas</h3>
+                <div class="stat-value" id="promptsProjected" style="font-size: 1.3em;">0 / 0</div>
+                <div class="stat-label">necesarias / al ritmo actual</div>
+            </div>
         </div>
 
         <div class="input-section">
@@ -732,6 +738,8 @@
             let timeRemaining = '--';
             let promptsPerHourUniform = 0;
             let promptsPerHourAdapted = 0;
+            let promptsProjectedNecessary = 0;
+            let promptsProjectedAtCurrentRate = 0;
 
             if (totalPromptsCurrentSession > 0) {
                 // 1. Calcular hora de inicio de sesión (primer prompt - 10 minutos)
@@ -778,6 +786,12 @@
                             // Si al ritmo actual te pasas del 95%, ajustamos al ritmo sostenible
                             const maxSustainableRate = totalHoursRemaining > 0 ? remainingPrompts / totalHoursRemaining : 0;
                             promptsPerHourAdapted = Math.min(currentRatePerHour, maxSustainableRate);
+
+                            // 7. Calcular prompts proyectadas
+                            // Necesarias: las que quedan para llegar al 95%
+                            promptsProjectedNecessary = remainingPrompts;
+                            // Al ritmo actual: cuántas harás si sigues así en el tiempo restante
+                            promptsProjectedAtCurrentRate = currentRatePerHour * totalHoursRemaining;
                         }
                     }
                 } else {
@@ -798,6 +812,7 @@
             document.getElementById('sessionEndTime').textContent = sessionEndTime;
             document.getElementById('timeRemaining').textContent = timeRemaining;
             document.getElementById('promptsCurrentHour').textContent = `${promptsPerHourUniform.toFixed(2)} / ${promptsPerHourAdapted.toFixed(2)}`;
+            document.getElementById('promptsProjected').textContent = `${promptsProjectedNecessary.toFixed(2)} / ${promptsProjectedAtCurrentRate.toFixed(2)}`;
 
             document.getElementById('sessionIndicator').textContent = `Sesión ${currentSessionNumber} de 2`;
 
