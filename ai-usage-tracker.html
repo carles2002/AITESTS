@@ -577,9 +577,9 @@
             </div>
 
             <div class="stat-card">
-                <h3>Prompts Hora Actual</h3>
+                <h3>Prompts por Hora</h3>
                 <div class="stat-value" id="promptsCurrentHour" style="font-size: 1.3em;">0 / 0</div>
-                <div class="stat-label">uniforme / adaptado</div>
+                <div class="stat-label">uniforme / ritmo actual</div>
             </div>
         </div>
 
@@ -730,28 +730,22 @@
             let remainingPrompts = 0;
             let sessionEndTime = '--:--';
             let timeRemaining = '--';
-            let promptsCurrentHourUniform = 0;
-            let promptsCurrentHourAdapted = 0;
+            let promptsPerHourUniform = 0;
+            let promptsPerHourAdapted = 0;
 
             if (totalPromptsCurrentSession > 0) {
-                // 1. Calcular prompts restantes hasta el 95%
-                const usageRemaining = 95 - totalUsageCurrentSession;
-                // Redondear hacia arriba el uso medio por prompt
-                const avgPerPromptRoundedUp = Math.ceil(avgPerPrompt * 100) / 100;
-                if (avgPerPromptRoundedUp > 0 && usageRemaining > 0) {
-                    remainingPrompts = usageRemaining / avgPerPromptRoundedUp;
-                }
-
-                // 2. Calcular hora de inicio de sesión (primer prompt - 10 minutos)
+                // 1. Calcular hora de inicio de sesión (primer prompt - 10 minutos)
                 const firstPromptTime = new Date(currentSessionPrompts[0].timestamp);
                 const sessionStartTime = new Date(firstPromptTime.getTime() - 10 * 60 * 1000);
 
-                // 3. Calcular hora de fin de sesión (inicio + 5 horas)
+                // 2. Calcular hora de fin de sesión (inicio + 5 horas)
                 const sessionEndTimeDate = new Date(sessionStartTime.getTime() + 5 * 60 * 60 * 1000);
                 sessionEndTime = sessionEndTimeDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
-                // 4. Calcular tiempo restante
+                // 3. Calcular tiempo transcurrido y restante
                 const now = new Date();
+                const sessionElapsedMs = now - sessionStartTime;
+                const sessionElapsedHours = sessionElapsedMs / (60 * 60 * 1000);
                 const timeRemainingMs = sessionEndTimeDate - now;
 
                 if (timeRemainingMs > 0) {
@@ -759,41 +753,31 @@
                     const minutesRemainingTotal = Math.floor(timeRemainingMs / (60 * 1000));
                     const minutesRemaining = minutesRemainingTotal % 60;
                     timeRemaining = `${hoursRemaining}h ${minutesRemaining}m`;
+                    const totalHoursRemaining = timeRemainingMs / (60 * 60 * 1000);
 
-                    // 5. Calcular prompts para la hora actual
-                    if (remainingPrompts > 0) {
-                        // Opción A: Distribución uniforme
-                        const totalHoursRemaining = timeRemainingMs / (60 * 60 * 1000);
+                    // 4. Calcular prompts restantes hasta el 95%
+                    const usageRemaining = 95 - totalUsageCurrentSession;
+                    // Redondear hacia arriba el uso medio por prompt para ser conservador
+                    const avgPerPromptRoundedUp = Math.ceil(avgPerPrompt * 100) / 100;
+
+                    if (avgPerPromptRoundedUp > 0 && usageRemaining > 0) {
+                        remainingPrompts = usageRemaining / avgPerPromptRoundedUp;
+
+                        // 5. Calcular prompts por hora - UNIFORME (distribución equitativa)
+                        // Dividir las prompts restantes entre las horas que quedan de sesión
                         if (totalHoursRemaining > 0) {
-                            promptsCurrentHourUniform = Math.floor(remainingPrompts / totalHoursRemaining);
+                            promptsPerHourUniform = remainingPrompts / totalHoursRemaining;
                         }
 
-                        // Opción B: Adaptado al ritmo actual
-                        // Calcular cuánto tiempo ha pasado desde el inicio de la sesión
-                        const sessionElapsedMs = now - sessionStartTime;
-                        const sessionElapsedHours = sessionElapsedMs / (60 * 60 * 1000);
-
+                        // 6. Calcular prompts por hora - ADAPTADO (ritmo actual)
+                        // Basado en cuántas prompts has hecho por hora hasta ahora
                         if (sessionElapsedHours > 0) {
-                            // Ritmo actual: prompts por hora que llevamos haciendo
-                            const currentRate = totalPromptsCurrentSession / sessionElapsedHours;
+                            const currentRatePerHour = totalPromptsCurrentSession / sessionElapsedHours;
 
-                            // Calcular cuánto podemos hacer en la hora actual basándonos en:
-                            // - El ritmo actual de prompts/hora
-                            // - Ajustado por el límite de prompts restantes
-                            const currentHourStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 0, 0);
-                            const currentHourEnd = new Date(currentHourStart.getTime() + 60 * 60 * 1000);
-                            const currentHourRemainingMs = currentHourEnd - now;
-                            const currentHourRemainingFraction = currentHourRemainingMs / (60 * 60 * 1000);
-
-                            // Prompts que podríamos hacer en lo que queda de hora al ritmo actual
-                            const promptsAtCurrentRate = currentRate * currentHourRemainingFraction;
-
-                            // Pero también consideramos el ritmo sostenible para llegar al 95%
-                            const sustainableRatePerHour = totalHoursRemaining > 0 ? remainingPrompts / totalHoursRemaining : 0;
-                            const promptsAtSustainableRate = sustainableRatePerHour * currentHourRemainingFraction;
-
-                            // Usamos el mínimo entre el ritmo actual y el sostenible
-                            promptsCurrentHourAdapted = Math.floor(Math.min(promptsAtCurrentRate, promptsAtSustainableRate));
+                            // El adaptado es el ritmo actual, pero limitado a no exceder las prompts restantes
+                            // Si al ritmo actual te pasas del 95%, ajustamos al ritmo sostenible
+                            const maxSustainableRate = totalHoursRemaining > 0 ? remainingPrompts / totalHoursRemaining : 0;
+                            promptsPerHourAdapted = Math.min(currentRatePerHour, maxSustainableRate);
                         }
                     }
                 } else {
@@ -813,7 +797,7 @@
             document.getElementById('remainingPrompts').textContent = remainingPrompts.toFixed(2);
             document.getElementById('sessionEndTime').textContent = sessionEndTime;
             document.getElementById('timeRemaining').textContent = timeRemaining;
-            document.getElementById('promptsCurrentHour').textContent = `${promptsCurrentHourUniform} / ${promptsCurrentHourAdapted}`;
+            document.getElementById('promptsCurrentHour').textContent = `${promptsPerHourUniform.toFixed(2)} / ${promptsPerHourAdapted.toFixed(2)}`;
 
             document.getElementById('sessionIndicator').textContent = `Sesión ${currentSessionNumber} de 2`;
 
