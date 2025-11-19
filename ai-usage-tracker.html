@@ -657,11 +657,17 @@
 
         <!-- Estadísticas Semanales -->
         <div class="stats-section" id="weeklyStatsSection">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="margin: 0;">📈 Estadísticas Semanales (Últimos 7 días)</h2>
-                <button class="btn-success" onclick="exportWeeklyData()" style="min-width: auto; flex: none;">
-                    💾 Exportar Datos
-                </button>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="handleFileImport(event)">
+                    <button class="btn-success" onclick="document.getElementById('importFileInput').click()" style="min-width: auto; flex: none; background: #3498db;">
+                        📥 Importar Datos
+                    </button>
+                    <button class="btn-success" onclick="exportWeeklyData()" style="min-width: auto; flex: none;">
+                        💾 Exportar Datos
+                    </button>
+                </div>
             </div>
             <div id="weeklyStatsContent"></div>
         </div>
@@ -1858,6 +1864,149 @@
             URL.revokeObjectURL(url);
 
             showAlert('Datos exportados correctamente en formato JSON', 'success');
+        }
+
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    importWeeklyData(importedData);
+                } catch (error) {
+                    showAlert('Error al leer el archivo JSON: ' + error.message, 'danger');
+                }
+            };
+            reader.readAsText(file);
+
+            // Reset the input so the same file can be imported again if needed
+            event.target.value = '';
+        }
+
+        function importWeeklyData(importedData) {
+            // Validar estructura del JSON
+            if (!importedData || !importedData.dailyData || !Array.isArray(importedData.dailyData)) {
+                showAlert('Formato de archivo inválido. Asegúrate de que es un archivo exportado válido.', 'danger');
+                return;
+            }
+
+            if (importedData.dailyData.length === 0) {
+                showAlert('El archivo no contiene datos para importar.', 'warning');
+                return;
+            }
+
+            // Confirmar importación
+            const confirmMsg = `¿Importar ${importedData.dailyData.length} día(s) de datos?\n\n` +
+                `Total prompts: ${importedData.summary?.totalPrompts || 'N/A'}\n` +
+                `Coste total: ${importedData.summary?.totalCost?.toFixed(2) || 'N/A'}€\n\n` +
+                `Los datos duplicados se fusionarán manteniendo la información más reciente.`;
+
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+
+            let mergedDays = 0;
+            let addedDays = 0;
+            let sessionsAdded = 0;
+            let sessionsUpdated = 0;
+
+            // Crear una copia de dailyHistory para trabajar
+            let updatedHistory = [...dailyHistory];
+
+            // Procesar cada día del archivo importado
+            importedData.dailyData.forEach(importedDay => {
+                // Buscar si ya existe un día con esta fecha
+                const existingDayIndex = updatedHistory.findIndex(d => d.date === importedDay.date);
+
+                if (existingDayIndex !== -1) {
+                    // Día ya existe - hacer merge de sesiones
+                    mergedDays++;
+                    const existingDay = updatedHistory[existingDayIndex];
+
+                    // Procesar cada sesión importada
+                    importedDay.sessions.forEach(importedSession => {
+                        // Buscar si ya existe una sesión con el mismo número
+                        const existingSessionIndex = existingDay.sessions.findIndex(
+                            s => s.sessionNumber === importedSession.sessionNumber
+                        );
+
+                        if (existingSessionIndex !== -1) {
+                            // Sesión ya existe - decidir cuál mantener
+                            const existingSession = existingDay.sessions[existingSessionIndex];
+
+                            // Criterios de decisión (en orden de prioridad):
+                            // 1. Mantener la que tenga más prompts (más completa)
+                            // 2. Si tienen el mismo número de prompts, mantener la más reciente (por timestamp)
+                            let shouldReplace = false;
+
+                            if (importedSession.prompts.length > existingSession.prompts.length) {
+                                shouldReplace = true;
+                            } else if (importedSession.prompts.length === existingSession.prompts.length) {
+                                // Comparar por fecha del último prompt
+                                const importedLastTimestamp = new Date(importedSession.prompts[importedSession.prompts.length - 1].timestamp);
+                                const existingLastTimestamp = new Date(existingSession.prompts[existingSession.prompts.length - 1].timestamp);
+
+                                if (importedLastTimestamp > existingLastTimestamp) {
+                                    shouldReplace = true;
+                                }
+                            }
+
+                            if (shouldReplace) {
+                                existingDay.sessions[existingSessionIndex] = importedSession;
+                                sessionsUpdated++;
+                            }
+                        } else {
+                            // Sesión nueva - agregar
+                            existingDay.sessions.push(importedSession);
+                            sessionsAdded++;
+                        }
+                    });
+
+                    // Recalcular totales del día después del merge
+                    let allPrompts = [];
+                    existingDay.sessions.forEach(s => {
+                        allPrompts = allPrompts.concat(s.prompts);
+                    });
+                    existingDay.totalCost = allPrompts.reduce((sum, p) => sum + p.cost, 0);
+                    existingDay.totalPrompts = allPrompts.length;
+                    existingDay.avgCostPerPrompt = allPrompts.length > 0 ? existingDay.totalCost / allPrompts.length : 0;
+
+                } else {
+                    // Día nuevo - agregar completo
+                    updatedHistory.push(importedDay);
+                    addedDays++;
+                    sessionsAdded += importedDay.sessions.length;
+                }
+            });
+
+            // Ordenar por fecha (más reciente primero)
+            updatedHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            // Mantener solo los últimos 7 días
+            if (updatedHistory.length > 7) {
+                updatedHistory = updatedHistory.slice(0, 7);
+            }
+
+            // Actualizar dailyHistory
+            dailyHistory = updatedHistory;
+
+            // Guardar y actualizar interfaz
+            saveData();
+            updateAll();
+
+            // Mostrar resumen de la importación
+            let summaryMsg = '✅ Datos importados correctamente:\n\n';
+            if (addedDays > 0) summaryMsg += `• ${addedDays} día(s) nuevos agregados\n`;
+            if (mergedDays > 0) summaryMsg += `• ${mergedDays} día(s) fusionados con datos existentes\n`;
+            if (sessionsAdded > 0) summaryMsg += `• ${sessionsAdded} sesión(es) nuevas agregadas\n`;
+            if (sessionsUpdated > 0) summaryMsg += `• ${sessionsUpdated} sesión(es) actualizadas con datos más recientes\n`;
+            summaryMsg += `\n📊 Total en historial: ${dailyHistory.length} día(s)`;
+
+            showAlert(summaryMsg, 'success');
         }
 
         function updateAll() {
