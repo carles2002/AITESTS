@@ -183,6 +183,31 @@
             background: #27ae60;
         }
 
+        .btn-toggle {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-toggle:hover {
+            background: #2980b9;
+        }
+
+        .btn-toggle.active {
+            background: #2ecc71;
+        }
+
+        .input-mode-toggle {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+
+        .toggle-label {
+            font-size: 0.95em;
+            color: #666;
+        }
+
         .history-section, .stats-section {
             background: white;
             padding: 30px;
@@ -592,8 +617,15 @@
         <div class="input-section">
             <h2 style="color: #667eea; margin-bottom: 20px;">Registrar Nuevo Prompt</h2>
             <form id="promptForm">
+                <div class="input-mode-toggle">
+                    <span class="toggle-label">Modo de entrada:</span>
+                    <button type="button" class="btn-toggle" id="toggleModeBtn" onclick="toggleInputMode()">
+                        <span id="toggleModeText">% Consumido</span>
+                    </button>
+                    <span class="toggle-label" id="modeDescription">Introduce el porcentaje consumido</span>
+                </div>
                 <div class="form-group">
-                    <label for="currentUsage">Porcentaje de Uso Actual (%):</label>
+                    <label for="currentUsage" id="usageLabel">Porcentaje de Uso Actual (%):</label>
                     <input
                         type="number"
                         id="currentUsage"
@@ -695,6 +727,35 @@
         let dailyCost = parseFloat(localStorage.getItem('dailyCost')) || 0;
         let completedSessions = JSON.parse(localStorage.getItem('completedSessions')) || [];
         let dailyHistory = JSON.parse(localStorage.getItem('dailyHistory')) || [];
+
+        // Modo de entrada: 'consumed' (consumido) o 'remaining' (restante)
+        let inputMode = localStorage.getItem('inputMode') || 'consumed';
+
+        function toggleInputMode() {
+            inputMode = inputMode === 'consumed' ? 'remaining' : 'consumed';
+            localStorage.setItem('inputMode', inputMode);
+            updateInputModeUI();
+            showAlert(`Modo cambiado a: ${inputMode === 'consumed' ? 'Porcentaje Consumido' : 'Porcentaje Restante'}`, 'success');
+        }
+
+        function updateInputModeUI() {
+            const toggleBtn = document.getElementById('toggleModeBtn');
+            const toggleText = document.getElementById('toggleModeText');
+            const modeDescription = document.getElementById('modeDescription');
+            const usageLabel = document.getElementById('usageLabel');
+
+            if (inputMode === 'consumed') {
+                toggleText.textContent = '% Consumido';
+                toggleBtn.classList.remove('active');
+                modeDescription.textContent = 'Introduce el porcentaje consumido';
+                usageLabel.textContent = 'Porcentaje Consumido (%):';
+            } else {
+                toggleText.textContent = '% Restante';
+                toggleBtn.classList.add('active');
+                modeDescription.textContent = 'Introduce el porcentaje restante';
+                usageLabel.textContent = 'Porcentaje Restante (%):';
+            }
+        }
 
         function showAlert(message, type = 'success') {
             const alertContainer = document.getElementById('alertContainer');
@@ -1702,16 +1763,23 @@
         document.getElementById('promptForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
-            const currentUsage = parseFloat(document.getElementById('currentUsage').value);
+            let inputValue = parseFloat(document.getElementById('currentUsage').value);
             const modelType = document.getElementById('modelType').value;
 
-            if (isNaN(currentUsage) || currentUsage < 0 || currentUsage > 100) {
+            if (isNaN(inputValue) || inputValue < 0 || inputValue > 100) {
                 showAlert('Por favor, introduce un porcentaje válido entre 0 y 100', 'danger');
                 return;
             }
 
+            // Convertir de restante a consumido si es necesario
+            let currentUsage = inputValue;
+            if (inputMode === 'remaining') {
+                currentUsage = 100 - inputValue;
+            }
+
             if (currentUsage < lastUsage) {
-                showAlert('El porcentaje actual no puede ser menor al anterior (' + lastUsage.toFixed(2) + '%)', 'warning');
+                const modeText = inputMode === 'consumed' ? 'consumido' : 'restante';
+                showAlert(`El porcentaje ${modeText} no puede ser menor al anterior (${lastUsage.toFixed(2)}% consumido = ${(100 - lastUsage).toFixed(2)}% restante)`, 'warning');
                 return;
             }
 
@@ -1737,7 +1805,11 @@
             document.getElementById('currentUsage').value = '';
             document.getElementById('currentUsage').focus();
 
-            showAlert(`Prompt registrado (${modelType}): ${consumed.toFixed(2)}% consumido (${cost.toFixed(3)}€)`, 'success');
+            const displayMsg = inputMode === 'consumed'
+                ? `Prompt registrado (${modelType}): ${consumed.toFixed(2)}% consumido (${cost.toFixed(3)}€)`
+                : `Prompt registrado (${modelType}): ${consumed.toFixed(2)}% consumido = ${(100 - currentUsage).toFixed(2)}% restante (${cost.toFixed(3)}€)`;
+
+            showAlert(displayMsg, 'success');
         });
 
         function saveData() {
@@ -2018,6 +2090,7 @@
         }
 
         // Inicializar la aplicación
+        updateInputModeUI(); // Establecer el modo de entrada correcto al cargar
         updateAll();
     </script>
 </body>
