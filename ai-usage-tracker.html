@@ -548,6 +548,9 @@
             <div class="stat-card">
                 <h3>Uso Sesión Actual (5h)</h3>
                 <div class="stat-value" id="totalUsage">0.00%</div>
+                <div class="stat-label" style="color: #666; font-size: 0.95em; margin-top: 5px;">
+                    Restante: <span id="remainingUsage" style="font-weight: bold; color: #2ecc71;">100.00%</span>
+                </div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressBar" style="width: 0%">0%</div>
                 </div>
@@ -873,6 +876,7 @@
             }
 
             document.getElementById('totalUsage').textContent = totalUsageCurrentSession.toFixed(2) + '%';
+            document.getElementById('remainingUsage').textContent = (100 - totalUsageCurrentSession).toFixed(2) + '%';
             document.getElementById('totalCost').textContent = totalCost.toFixed(2) + '€';
             document.getElementById('avgCostPerPrompt').textContent = avgCostPerPrompt.toFixed(3) + '€';
             document.getElementById('totalPrompts').textContent = totalPromptsToday;
