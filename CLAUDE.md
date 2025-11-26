@@ -25,7 +25,7 @@ AITESTS/
 
 1. **Solo regeneración manual**: Las recomendaciones NO se generan automáticamente al actualizar la página o registrar prompts. Solo se generan cuando el usuario presiona "Regenerar" para evitar saturar Ollama y mejorar la experiencia de usuario.
 
-2. **Ocultar completamente cuando está desactivado**: Cuando el toggle está OFF, la sección de recomendaciones no se renderiza en absoluto (no aparece grisada ni deshabilitada).
+2. **Mantener controles visibles cuando está desactivado**: Cuando el toggle está OFF, la sección de recomendaciones sigue visible con el título, toggle y botón "Regenerar" (deshabilitado), pero el contenido muestra el mensaje "Recomendaciones desactivadas".
 
 3. **Persistencia en localStorage**: Se guardan dos claves adicionales:
    - `recommendationsEnabled`: boolean (true por defecto)

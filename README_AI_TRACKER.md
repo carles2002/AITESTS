@@ -502,7 +502,9 @@ La aplicación incluye una funcionalidad de recomendaciones inteligentes basadas
 
 ### Uso de las Recomendaciones
 
-1. **Activar/Desactivar**: Usa el toggle (switch) para activar o desactivar las recomendaciones
+1. **Activar/Desactivar**: Usa el toggle (switch) para mostrar u ocultar las recomendaciones
+   - Cuando está desactivado, se muestra el mensaje "Recomendaciones desactivadas" y el botón Regenerar se deshabilita
+   - Cuando está activado, puedes ver las recomendaciones y generar nuevas
 2. **Regenerar**: Presiona el botón "Regenerar" para obtener una nueva recomendación basada en tus estadísticas actuales
 3. **Ubicación**: Las recomendaciones aparecen en la sección "Estadísticas del Día Actual"
 
