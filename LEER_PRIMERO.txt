@@ -1,0 +1,32 @@
+========================================
+   AI USAGE TRACKER - INSTRUCCIONES
+========================================
+
+INICIO RAPIDO (Windows):
+------------------------
+1. Asegurate de tener Python y Ollama instalados
+2. DOBLE CLIC en: iniciar-tracker.bat
+3. Espera a que se abra el navegador automaticamente
+4. Ya esta! La app funcionara en: http://localhost:8080
+
+DETENER TODO:
+-------------
+DOBLE CLIC en: detener-tracker.bat
+
+REQUISITOS PREVIOS:
+-------------------
+1. Python instalado (python.org)
+2. Ollama instalado (ollama.ai)
+3. Modelo descargado: ollama pull gemma3:1b
+
+IMPORTANTE:
+-----------
+- NO abras el archivo .html directamente (doble clic en el HTML)
+- SIEMPRE usa el script iniciar-tracker.bat
+- Esto evita problemas de localStorage y CORS
+
+DOCUMENTACION COMPLETA:
+-----------------------
+Lee README_AI_TRACKER.md para mas informacion
+
+========================================
