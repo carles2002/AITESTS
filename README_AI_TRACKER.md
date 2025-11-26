@@ -92,12 +92,26 @@ Promedio de 4% por prompt → ~25 prompts por 100% → ~25 prompts disponibles p
 
 ## Instalación
 
-### Opción 1: XAMPP
+### Opción 1: Script Automático (Windows) ⚡ **RECOMENDADO**
+1. Asegúrate de tener Python instalado
+2. Doble clic en `iniciar-tracker.bat`
+3. Espera a que se abra el navegador automáticamente
+
+**¿Qué hace este script?**
+- Detiene procesos previos
+- Configura CORS para Ollama
+- Inicia Ollama con CORS habilitado
+- Inicia servidor web en http://localhost:8080
+- Abre el navegador automáticamente
+
+**Para detener todo:** Ejecuta `detener-tracker.bat`
+
+### Opción 2: XAMPP
 1. Copia `ai-usage-tracker.html` a la carpeta `htdocs` de XAMPP
 2. Inicia Apache desde el panel de control de XAMPP
 3. Abre el navegador y ve a: `http://localhost/ai-usage-tracker.html`
 
-### Opción 2: Servidor Python
+### Opción 3: Servidor Python Manual
 ```bash
 # En el directorio del archivo:
 python -m http.server 8000
@@ -105,8 +119,13 @@ python -m http.server 8000
 # Abre: http://localhost:8000/ai-usage-tracker.html
 ```
 
-### Opción 3: Abrir Directamente
-Simplemente abre el archivo `ai-usage-tracker.html` con tu navegador favorito (doble clic).
+### ⚠️ Opción 4: Abrir Directamente (NO RECOMENDADO)
+Abrir directamente el archivo HTML con el navegador (`file://`) tiene limitaciones:
+- localStorage puede no funcionar correctamente
+- CORS bloqueará las peticiones a Ollama
+- Algunas funcionalidades pueden fallar
+
+**Usa siempre un servidor web local (Opción 1, 2 o 3)**
 
 ## Cómo Usar
 

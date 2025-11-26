@@ -7,6 +7,8 @@ Este archivo documenta las decisiones de implementación y notas técnicas para 
 ```
 AITESTS/
 ├── ai-usage-tracker.html    # Aplicación principal (HTML/CSS/JS autocontenido)
+├── iniciar-tracker.bat      # Script de inicio automático (Windows)
+├── detener-tracker.bat      # Script para detener servicios (Windows)
 ├── README_AI_TRACKER.md     # Documentación de usuario
 └── CLAUDE.md                # Notas de desarrollo (este archivo)
 ```
