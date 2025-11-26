@@ -484,6 +484,47 @@ R: Porque el coste es diario (8h de trabajo total), mientras que el uso se reset
 **P: Si tengo 16 prompts en 1 hora, ¿cuántos minutos tengo por prompt?**
 R: 60 minutos / 16 prompts = 3.75 minutos por prompt. La app calcula esto automáticamente.
 
+## Recomendaciones con IA (Ollama)
+
+La aplicación incluye una funcionalidad de recomendaciones inteligentes basadas en IA que analiza tus estadísticas del día y genera consejos personalizados para optimizar tu consumo.
+
+### Requisitos
+
+- **Ollama** instalado y ejecutándose localmente
+- Modelo **gemma3:1b** descargado en Ollama
+
+### Instalación de Ollama
+
+1. Descarga e instala Ollama desde: https://ollama.ai/
+2. Ejecuta en terminal: `ollama pull gemma3:1b`
+3. Asegúrate de que Ollama esté ejecutándose: `ollama serve`
+4. Verifica que esté disponible en: `http://localhost:11434`
+
+### Uso de las Recomendaciones
+
+1. **Activar/Desactivar**: Usa el toggle (switch) para activar o desactivar las recomendaciones
+2. **Regenerar**: Presiona el botón "Regenerar" para obtener una nueva recomendación basada en tus estadísticas actuales
+3. **Ubicación**: Las recomendaciones aparecen en la sección "Estadísticas del Día Actual"
+
+### Características
+
+- **Recomendaciones personalizadas**: Basadas en prompts realizados, uso, coste, modelos utilizados y hora pico de actividad
+- **40-50 palabras**: Consejos concisos y prácticos
+- **Persistencia**: La última recomendación se guarda en localStorage
+- **Manejo de errores**: Mensajes claros si Ollama no está disponible
+- **Timeout**: 30 segundos máximo de espera
+
+### Preguntas Frecuentes sobre Ollama
+
+**P: ¿Qué pasa si Ollama no está ejecutándose?**
+R: Verás un mensaje de error indicando que no se puede conectar. Las demás funcionalidades de la app seguirán funcionando normalmente.
+
+**P: ¿Puedo usar otro modelo de Ollama?**
+R: Sí, puedes cambiar la constante `OLLAMA_MODEL` en el código JavaScript. Busca la línea `const OLLAMA_MODEL = 'gemma3:1b';` y cámbiala por el modelo que prefieras.
+
+**P: ¿Las recomendaciones se generan automáticamente?**
+R: No, solo se generan cuando presionas el botón "Regenerar" para evitar llamadas innecesarias a la API.
+
 ## Soporte
 
 El archivo es completamente autocontenido y puede ser editado con cualquier editor de texto. Todos los cambios persisten automáticamente gracias a localStorage.
@@ -491,6 +532,6 @@ El archivo es completamente autocontenido y puede ser editado con cualquier edit
 ---
 
 **Desarrollado para monitoreo profesional de consumo de Claude AI**
-**Versión**: 2.1 - Multi-Session Support
+**Versión**: 2.2 - Ollama AI Recommendations
 **Última actualización**: Noviembre 2025
 **Licencia**: Uso libre
