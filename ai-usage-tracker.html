@@ -561,8 +561,22 @@
 
         .recommendations-controls {
             display: flex;
-            gap: 12px;
+            gap: 15px;
             align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toggle-label {
+            font-size: 0.85em;
+            color: #555;
+            font-weight: 500;
+            white-space: nowrap;
         }
 
         .switch {
@@ -1043,6 +1057,7 @@
         let dailyHistory = [];
         let inputMode = 'consumed';
         let recommendationsEnabled = true;
+        let autoRegenerateEnabled = false; // Auto-regenerar recomendaciones al registrar prompt
         let ollamaRecommendation = '';
         let isGeneratingRecommendation = false;
 
@@ -1064,6 +1079,7 @@
                 dailyHistory = safeJSONParse(getStorageItem('dailyHistory'), []);
                 inputMode = getStorageItem('inputMode') || 'consumed';
                 recommendationsEnabled = getStorageItem('recommendationsEnabled') !== 'false';
+                autoRegenerateEnabled = getStorageItem('autoRegenerateEnabled') === 'true';
                 ollamaRecommendation = getStorageItem('ollamaRecommendation') || '';
 
                 console.log('✓ Datos cargados:', {
@@ -1518,6 +1534,42 @@
             const modelStats = getModelStats(allPromptsToday);
 
             let html = `
+            <div class="recommendations-section" id="ollama-recommendations-container">
+                    <div class="recommendations-header">
+                        <h3>💡 Recomendaciones (IA - Ollama)</h3>
+                        <div class="recommendations-controls">
+                            <div class="toggle-group">
+                                <label class="toggle-label">Activar:</label>
+                                <label class="switch">
+                                    <input type="checkbox" id="recommendationsToggle" ${recommendationsEnabled ? 'checked' : ''}>
+                                    <span class="slider-toggle"></span>
+                                </label>
+                            </div>
+                            <div class="toggle-group">
+                                <label class="toggle-label">Auto-regenerar:</label>
+                                <label class="switch">
+                                    <input type="checkbox" id="autoRegenerateToggle" ${autoRegenerateEnabled ? 'checked' : ''}>
+                                    <span class="slider-toggle"></span>
+                                </label>
+                            </div>
+                            <button id="regenerateRecommendations" class="btn-regenerate" ${!recommendationsEnabled || isGeneratingRecommendation ? 'disabled' : ''}>
+                                <span class="spinner"></span>
+                                <span class="btn-icon">🔄</span>
+                                <span>Regenerar</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="ollama-recommendations-content">
+                        ${!recommendationsEnabled
+                            ? '<div class="no-data-state">Recomendaciones desactivadas. Activa el toggle para habilitarlas.</div>'
+                            : isGeneratingRecommendation
+                                ? '<div class="loading-state"><div class="spinner-large"></div>Generando recomendación con Ollama...</div>'
+                                : ollamaRecommendation
+                                    ? '<p class="recommendation-text">' + ollamaRecommendation + '</p>'
+                                    : '<div class="no-data-state">Presiona "Regenerar" para obtener una recomendación basada en tus estadísticas del día.</div>'
+                        }
+                    </div>
+                </div>
                 <div class="stats-grid">
                     <div class="mini-stat">
                         <div class="mini-stat-label">Uso Total Hoy</div>
@@ -1600,32 +1652,7 @@
                     </div>
                 </div>
 
-                <div class="recommendations-section" id="ollama-recommendations-container">
-                    <div class="recommendations-header">
-                        <h3>💡 Recomendaciones (IA - Ollama)</h3>
-                        <div class="recommendations-controls">
-                            <label class="switch">
-                                <input type="checkbox" id="recommendationsToggle" ${recommendationsEnabled ? 'checked' : ''}>
-                                <span class="slider-toggle"></span>
-                            </label>
-                            <button id="regenerateRecommendations" class="btn-regenerate" ${!recommendationsEnabled || isGeneratingRecommendation ? 'disabled' : ''}>
-                                <span class="spinner"></span>
-                                <span class="btn-icon">🔄</span>
-                                <span>Regenerar</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="ollama-recommendations-content">
-                        ${!recommendationsEnabled
-                            ? '<div class="no-data-state">Recomendaciones desactivadas. Activa el toggle para habilitarlas.</div>'
-                            : isGeneratingRecommendation
-                                ? '<div class="loading-state"><div class="spinner-large"></div>Generando recomendación con Ollama...</div>'
-                                : ollamaRecommendation
-                                    ? '<p class="recommendation-text">' + ollamaRecommendation + '</p>'
-                                    : '<div class="no-data-state">Presiona "Regenerar" para obtener una recomendación basada en tus estadísticas del día.</div>'
-                        }
-                    </div>
-                </div>
+                
             `;
 
             content.innerHTML = html;
@@ -2269,6 +2296,7 @@
 
             try {
                 setStorageItem('recommendationsEnabled', recommendationsEnabled.toString());
+                setStorageItem('autoRegenerateEnabled', autoRegenerateEnabled.toString());
                 setStorageItem('ollamaRecommendation', ollamaRecommendation);
                 return true;
             } catch (e) {
@@ -2765,9 +2793,9 @@ SI uso > 80%: Advierte sobre proximidad al límite (rojo), recomienda Haiku inme
 SI uso 30-80%: Análisis equilibrado. Recomienda balance entre modelos. Sugiere Sonnet solo si es necesario.
 SI uso < 30%: Estado tranquilo. Permite usar Sonnet o Opus sin preocupación. Aprovecha capacidad.
 
-Siempre incluye: 1) Análisis estado actual (crítico/normal/holgado), 2) Modelo recomendado, 3) Cuántos prompts estimados le quedan.
+Siempre incluye: 1) Análisis estado actual , 2) Modelo recomendado, 3) Cuántos prompts estimados le quedan. 4) A que velocidad consume y si es mucha o poca y cual debería ser la recomendada
 
-Responde SOLO con la recomendación, sin explicaciones adicionales, sin asteriscos, sin markdown. Máximo 60 palabras.`;
+Responde SOLO con la recomendación, sin explicaciones adicionales, sin asteriscos, sin markdown. Máximo 200 palabras. Pero si que haz uso de iconos`;
 
             try {
                 // Crear controlador de abort para timeout
@@ -2786,7 +2814,7 @@ Responde SOLO con la recomendación, sin explicaciones adicionales, sin asterisc
                         options: {
                             temperature: 0.7,
                             top_p: 0.9,
-                            num_predict: 100 // Limitar tokens de salida
+                            num_predict: 250 // Limitar tokens de salida
                         }
                     }),
                     signal: controller.signal
