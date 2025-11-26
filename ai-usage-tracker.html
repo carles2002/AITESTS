@@ -856,6 +856,11 @@
                     <button type="button" class="btn-secondary" onclick="resetSession()">Nueva Sesión (5h)</button>
                     <button type="button" class="btn-danger" onclick="endDay()">Acabar el Día</button>
                 </div>
+                <div style="margin-top: 10px; text-align: center;">
+                    <button type="button" class="btn-secondary" onclick="showStorageDiagnostics()" style="font-size: 0.85em; padding: 6px 12px;">
+                        🔍 Diagnóstico de Almacenamiento
+                    </button>
+                </div>
             </form>
         </div>
 
@@ -920,6 +925,108 @@
     </div>
 
     <script>
+        // ==========================================
+        // SISTEMA DE ALMACENAMIENTO ROBUSTO
+        // ==========================================
+
+        console.log('🚀 Iniciando AI Usage Tracker...');
+
+        let storageAvailable = false;
+        let usingSessionStorage = false;
+        let storageType = 'none';
+
+        // Verificar disponibilidad de localStorage
+        function checkStorageAvailability() {
+            try {
+                const test = '__storage_test__';
+                localStorage.setItem(test, test);
+                localStorage.removeItem(test);
+                storageAvailable = true;
+                storageType = 'localStorage';
+                console.log('✓ localStorage disponible');
+                return true;
+            } catch (e) {
+                // localStorage no disponible, intentar sessionStorage
+                try {
+                    const test = '__storage_test__';
+                    sessionStorage.setItem(test, test);
+                    sessionStorage.removeItem(test);
+                    storageAvailable = true;
+                    usingSessionStorage = true;
+                    storageType = 'sessionStorage';
+                    console.warn('⚠️ localStorage no disponible, usando sessionStorage (datos se perderán al cerrar pestaña)');
+                    return true;
+                } catch (e2) {
+                    // Ni localStorage ni sessionStorage disponibles
+                    storageAvailable = false;
+                    storageType = 'memory';
+                    console.error('❌ Storage no disponible, datos solo en memoria (se perderán al recargar)');
+                    return false;
+                }
+            }
+        }
+
+        // Wrapper para getItem (con fallback)
+        function getStorageItem(key) {
+            try {
+                if (usingSessionStorage) {
+                    return sessionStorage.getItem(key);
+                }
+                return localStorage.getItem(key);
+            } catch (e) {
+                console.error(`Error al leer ${key} del storage:`, e);
+                return null;
+            }
+        }
+
+        // Wrapper para setItem (con fallback)
+        function setStorageItem(key, value) {
+            try {
+                if (usingSessionStorage) {
+                    sessionStorage.setItem(key, value);
+                    return true;
+                }
+                localStorage.setItem(key, value);
+                return true;
+            } catch (e) {
+                // Posibles causas: QuotaExceededError, SecurityError
+                console.error(`Error al guardar ${key} en storage:`, e);
+
+                // Notificar al usuario
+                if (e.name === 'QuotaExceededError') {
+                    showAlert('⚠️ Almacenamiento lleno. Exporta tus datos y limpia el historial.', 'danger');
+                } else {
+                    showAlert('⚠️ No se pueden guardar datos. Verifica permisos del navegador.', 'danger');
+                }
+                return false;
+            }
+        }
+
+        // Función segura para parsear JSON
+        function safeJSONParse(str, defaultValue) {
+            if (!str || str === 'null' || str === 'undefined') return defaultValue;
+            try {
+                return JSON.parse(str);
+            } catch(e) {
+                console.error('Error al parsear JSON:', str, e);
+                return defaultValue;
+            }
+        }
+
+        // Ejecutar verificación al inicio
+        checkStorageAvailability();
+
+        // Notificar al usuario sobre el tipo de almacenamiento
+        if (storageType === 'sessionStorage') {
+            setTimeout(() => {
+                showAlert('⚠️ Usando almacenamiento temporal. Los datos se perderán al cerrar la pestaña.', 'warning');
+            }, 1000);
+        } else if (storageType === 'memory') {
+            setTimeout(() => {
+                showAlert('❌ Almacenamiento deshabilitado. Los datos solo existirán en esta sesión.', 'danger');
+            }, 1000);
+        }
+
         // Configuración: 4.1€/día para 8h de uso, el uso se mide en sesiones de 5h
         const COST_PER_DAY = 4.1;
         const COST_PER_HOUR = 0.5;
@@ -927,30 +1034,56 @@
         const USAGE_HOURS = 5;
         const COST_PER_PERCENT = COST_PER_HOUR / 100;
 
-        // Estado actual
-        let currentSessionNumber = parseInt(localStorage.getItem('currentSessionNumber')) || 1;
-        let currentSessionPrompts = JSON.parse(localStorage.getItem('currentSessionPrompts')) || [];
-        let lastUsage = parseFloat(localStorage.getItem('lastUsage')) || 0;
-        let dailyCost = parseFloat(localStorage.getItem('dailyCost')) || 0;
-        let completedSessions = JSON.parse(localStorage.getItem('completedSessions')) || [];
-        let dailyHistory = JSON.parse(localStorage.getItem('dailyHistory')) || [];
-
-        // Modo de entrada: 'consumed' (consumido) o 'remaining' (restante)
-        let inputMode = localStorage.getItem('inputMode') || 'consumed';
+        // Estado actual - Inicialización con valores por defecto
+        let currentSessionNumber = 1;
+        let currentSessionPrompts = [];
+        let lastUsage = 0;
+        let dailyCost = 0;
+        let completedSessions = [];
+        let dailyHistory = [];
+        let inputMode = 'consumed';
+        let recommendationsEnabled = true;
+        let ollamaRecommendation = '';
+        let isGeneratingRecommendation = false;
 
         // Configuración de Ollama para recomendaciones
         const OLLAMA_URL = 'http://localhost:11434/api/generate';
         const OLLAMA_MODEL = 'gemma3:1b';
         const OLLAMA_TIMEOUT = 30000; // 30 segundos
 
-        // Estado de recomendaciones Ollama
-        let recommendationsEnabled = localStorage.getItem('recommendationsEnabled') !== 'false'; // true por defecto
-        let ollamaRecommendation = localStorage.getItem('ollamaRecommendation') || '';
-        let isGeneratingRecommendation = false;
+        // Cargar datos del storage de forma segura
+        if (storageAvailable) {
+            try {
+                console.log('📥 Cargando datos desde storage...');
+
+                currentSessionNumber = parseInt(getStorageItem('currentSessionNumber')) || 1;
+                currentSessionPrompts = safeJSONParse(getStorageItem('currentSessionPrompts'), []);
+                lastUsage = parseFloat(getStorageItem('lastUsage')) || 0;
+                dailyCost = parseFloat(getStorageItem('dailyCost')) || 0;
+                completedSessions = safeJSONParse(getStorageItem('completedSessions'), []);
+                dailyHistory = safeJSONParse(getStorageItem('dailyHistory'), []);
+                inputMode = getStorageItem('inputMode') || 'consumed';
+                recommendationsEnabled = getStorageItem('recommendationsEnabled') !== 'false';
+                ollamaRecommendation = getStorageItem('ollamaRecommendation') || '';
+
+                console.log('✓ Datos cargados:', {
+                    tipo: storageType,
+                    sesion: currentSessionNumber,
+                    prompts: currentSessionPrompts.length,
+                    ultimoUso: lastUsage,
+                    coste: dailyCost
+                });
+            } catch(e) {
+                console.error('❌ Error crítico al cargar datos:', e);
+                alert('⚠️ Error al cargar datos guardados. Iniciando sesión limpia.');
+            }
+        } else {
+            console.warn('⚠️ Storage no disponible, usando valores por defecto');
+        }
 
         function toggleInputMode() {
             inputMode = inputMode === 'consumed' ? 'remaining' : 'consumed';
-            localStorage.setItem('inputMode', inputMode);
+            setStorageItem('inputMode', inputMode);
             updateInputModeUI();
             showAlert(`Modo cambiado a: ${inputMode === 'consumed' ? 'Porcentaje Consumido' : 'Porcentaje Restante'}`, 'success');
         }
@@ -2010,63 +2143,201 @@
 
         document.getElementById('promptForm').addEventListener('submit', function(e) {
             e.preventDefault();
+            console.log('📝 Formulario enviado - Iniciando registro de prompt');
 
-            let inputValue = parseFloat(document.getElementById('currentUsage').value);
-            const modelType = document.getElementById('modelType').value;
+            try {
+                let inputValue = parseFloat(document.getElementById('currentUsage').value);
+                const modelType = document.getElementById('modelType').value;
 
-            if (isNaN(inputValue) || inputValue < 0 || inputValue > 100) {
-                showAlert('Por favor, introduce un porcentaje válido entre 0 y 100', 'danger');
-                return;
+                console.log('Datos del formulario:', { inputValue, modelType, inputMode, lastUsage });
+
+                if (isNaN(inputValue) || inputValue < 0 || inputValue > 100) {
+                    console.warn('Validación falló: porcentaje inválido');
+                    showAlert('Por favor, introduce un porcentaje válido entre 0 y 100', 'danger');
+                    return;
+                }
+
+                // Convertir de restante a consumido si es necesario
+                let currentUsage = inputValue;
+                if (inputMode === 'remaining') {
+                    currentUsage = 100 - inputValue;
+                    console.log(`Convertido de restante a consumido: ${inputValue}% → ${currentUsage}%`);
+                }
+
+                if (currentUsage < lastUsage) {
+                    const modeText = inputMode === 'consumed' ? 'consumido' : 'restante';
+                    console.warn(`Validación falló: ${currentUsage} < ${lastUsage}`);
+                    showAlert(`El porcentaje ${modeText} no puede ser menor al anterior (${lastUsage.toFixed(2)}% consumido = ${(100 - lastUsage).toFixed(2)}% restante)`, 'warning');
+                    return;
+                }
+
+                const consumed = currentUsage - lastUsage;
+                const cost = consumed * COST_PER_PERCENT;
+
+                const newPrompt = {
+                    timestamp: new Date().toISOString(),
+                    usage: currentUsage,
+                    consumed: consumed,
+                    cost: cost,
+                    model: modelType
+                };
+
+                console.log('Nuevo prompt creado:', newPrompt);
+
+                currentSessionPrompts.push(newPrompt);
+                lastUsage = currentUsage;
+                dailyCost += cost;
+
+                console.log('Estado actualizado:', {
+                    totalPrompts: currentSessionPrompts.length,
+                    lastUsage,
+                    dailyCost
+                });
+
+                const savedOk = saveData();
+                if (!savedOk) {
+                    console.warn('⚠️ Los datos NO se guardaron en localStorage');
+                }
+
+                console.log('Actualizando UI...');
+                updateAll();
+                console.log('✓ UI actualizada');
+
+                // LIMPIAR EL CAMPO DESPUÉS DE REGISTRAR
+                document.getElementById('currentUsage').value = '';
+                document.getElementById('currentUsage').focus();
+
+                const displayMsg = inputMode === 'consumed'
+                    ? `Prompt registrado (${modelType}): ${consumed.toFixed(2)}% consumido (${cost.toFixed(3)}€)`
+                    : `Prompt registrado (${modelType}): ${consumed.toFixed(2)}% consumido = ${(100 - currentUsage).toFixed(2)}% restante (${cost.toFixed(3)}€)`;
+
+                showAlert(displayMsg, 'success');
+                console.log('✅ Prompt registrado exitosamente');
+
+            } catch(error) {
+                console.error('💥 ERROR CRÍTICO al registrar prompt:', error);
+                showAlert('❌ Error al registrar prompt: ' + error.message, 'danger');
             }
-
-            // Convertir de restante a consumido si es necesario
-            let currentUsage = inputValue;
-            if (inputMode === 'remaining') {
-                currentUsage = 100 - inputValue;
-            }
-
-            if (currentUsage < lastUsage) {
-                const modeText = inputMode === 'consumed' ? 'consumido' : 'restante';
-                showAlert(`El porcentaje ${modeText} no puede ser menor al anterior (${lastUsage.toFixed(2)}% consumido = ${(100 - lastUsage).toFixed(2)}% restante)`, 'warning');
-                return;
-            }
-
-            const consumed = currentUsage - lastUsage;
-            const cost = consumed * COST_PER_PERCENT;
-
-            const newPrompt = {
-                timestamp: new Date().toISOString(),
-                usage: currentUsage,
-                consumed: consumed,
-                cost: cost,
-                model: modelType
-            };
-
-            currentSessionPrompts.push(newPrompt);
-            lastUsage = currentUsage;
-            dailyCost += cost;
-
-            saveData();
-            updateAll();
-
-            // LIMPIAR EL CAMPO DESPUÉS DE REGISTRAR
-            document.getElementById('currentUsage').value = '';
-            document.getElementById('currentUsage').focus();
-
-            const displayMsg = inputMode === 'consumed'
-                ? `Prompt registrado (${modelType}): ${consumed.toFixed(2)}% consumido (${cost.toFixed(3)}€)`
-                : `Prompt registrado (${modelType}): ${consumed.toFixed(2)}% consumido = ${(100 - currentUsage).toFixed(2)}% restante (${cost.toFixed(3)}€)`;
-
-            showAlert(displayMsg, 'success');
         });
 
         function saveData() {
-            localStorage.setItem('currentSessionNumber', currentSessionNumber.toString());
-            localStorage.setItem('currentSessionPrompts', JSON.stringify(currentSessionPrompts));
-            localStorage.setItem('lastUsage', lastUsage.toString());
-            localStorage.setItem('dailyCost', dailyCost.toString());
-            localStorage.setItem('completedSessions', JSON.stringify(completedSessions));
-            localStorage.setItem('dailyHistory', JSON.stringify(dailyHistory));
+            if (!storageAvailable) {
+                console.warn('⚠️ Storage no disponible, datos solo en memoria');
+                return false;
+            }
+
+            try {
+                console.log('💾 Guardando datos en', storageType, '...');
+
+                // Usar wrapper functions para guardar con manejo de errores
+                const saveOperations = [
+                    { key: 'currentSessionNumber', value: currentSessionNumber.toString() },
+                    { key: 'currentSessionPrompts', value: JSON.stringify(currentSessionPrompts) },
+                    { key: 'lastUsage', value: lastUsage.toString() },
+                    { key: 'dailyCost', value: dailyCost.toString() },
+                    { key: 'completedSessions', value: JSON.stringify(completedSessions) },
+                    { key: 'dailyHistory', value: JSON.stringify(dailyHistory) }
+                ];
+
+                let allSuccess = true;
+                for (const op of saveOperations) {
+                    const success = setStorageItem(op.key, op.value);
+                    if (!success) {
+                        allSuccess = false;
+                        console.error(`❌ Falló al guardar: ${op.key}`);
+                    }
+                }
+
+                if (allSuccess) {
+                    console.log('✓ Todos los datos guardados correctamente');
+                    return true;
+                } else {
+                    console.warn('⚠️ Algunos datos no se pudieron guardar');
+                    return false;
+                }
+
+            } catch(e) {
+                console.error('❌ Error crítico en saveData():', e);
+                showAlert('❌ Error al guardar datos. Exporta tus datos urgentemente.', 'danger');
+                return false;
+            }
+        }
+
+        // Guardar configuración de Ollama
+        function saveOllamaConfig() {
+            if (!storageAvailable) return false;
+
+            try {
+                setStorageItem('recommendationsEnabled', recommendationsEnabled.toString());
+                setStorageItem('ollamaRecommendation', ollamaRecommendation);
+                return true;
+            } catch (e) {
+                console.error('Error al guardar configuración Ollama:', e);
+                return false;
+            }
+        }
+
+        // Verificar cuota de almacenamiento
+        function checkStorageQuota() {
+            if (!storageAvailable) return { used: 0, available: 0, percentage: 0 };
+
+            try {
+                // Calcular tamaño aproximado de datos almacenados
+                let totalSize = 0;
+                const storage = usingSessionStorage ? sessionStorage : localStorage;
+
+                for (let key in storage) {
+                    if (storage.hasOwnProperty(key)) {
+                        totalSize += storage[key].length + key.length;
+                    }
+                }
+
+                // localStorage típicamente tiene ~5MB (5,242,880 bytes)
+                const maxSize = 5242880;
+                const percentage = (totalSize / maxSize) * 100;
+
+                return {
+                    used: totalSize,
+                    available: maxSize - totalSize,
+                    percentage: percentage.toFixed(2)
+                };
+            } catch (e) {
+                return { used: 0, available: 0, percentage: 0 };
+            }
+        }
+
+        // Verificar y alertar si está cerca del límite
+        function warnIfStorageAlmostFull() {
+            const quota = checkStorageQuota();
+            if (quota.percentage > 80) {
+                showAlert(`⚠️ Almacenamiento al ${quota.percentage}%. Exporta datos y limpia el historial.`, 'warning');
+            }
+        }
+
+        // Diagnóstico de almacenamiento
+        function showStorageDiagnostics() {
+            const quota = checkStorageQuota();
+            const message = `
+📊 DIAGNÓSTICO DE ALMACENAMIENTO
+
+Tipo: ${storageType}
+Estado: ${storageAvailable ? '✓ Disponible' : '✗ No disponible'}
+Usando: ${usingSessionStorage ? 'sessionStorage (temporal)' : 'localStorage (persistente)'}
+
+Espacio usado: ${(quota.used / 1024).toFixed(2)} KB
+Espacio disponible: ${(quota.available / 1024).toFixed(2)} KB
+Porcentaje usado: ${quota.percentage}%
+
+Datos guardados:
+- Sesión actual: ${currentSessionNumber}
+- Prompts hoy: ${currentSessionPrompts.length}
+- Sesiones completadas: ${completedSessions.length}
+- Días en historial: ${dailyHistory.length}
+
+${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia historial' : '✓ Espacio suficiente'}
+            `.trim();
+
+            alert(message);
         }
 
         function resetSession() {
@@ -2091,6 +2362,7 @@
                 lastUsage = 0;
 
                 saveData();
+                warnIfStorageAlmostFull(); // Verificar espacio después de guardar sesión
                 updateAll();
 
                 showAlert(`Sesión ${sessionData.sessionNumber} guardada. Ahora en Sesión ${currentSessionNumber}. Coste diario: ${dailyCost.toFixed(2)}€`, 'success');
@@ -2146,6 +2418,7 @@
                 completedSessions = [];
 
                 saveData();
+                warnIfStorageAlmostFull(); // Verificar espacio después de guardar historial
                 updateAll();
 
                 showAlert(`Día finalizado. ${allSessions.length} sesiones guardadas con ${allPromptsDay.length} prompts totales. ¡Nuevo día comenzado!`, 'success');
@@ -2354,7 +2627,7 @@
         // Manejar el toggle de recomendaciones
         function handleRecommendationToggle(event) {
             recommendationsEnabled = event.target.checked;
-            localStorage.setItem('recommendationsEnabled', recommendationsEnabled.toString());
+            saveOllamaConfig();
 
             // Refrescar la vista (no borrar la recomendación, solo ocultar/mostrar)
             updateTodayStats();
@@ -2491,7 +2764,7 @@ Genera una recomendación que combine: sugerencias de optimización, análisis d
 
                 if (data.response && data.response.trim()) {
                     ollamaRecommendation = data.response.trim();
-                    localStorage.setItem('ollamaRecommendation', ollamaRecommendation);
+                    saveOllamaConfig();
                     showAlert('✅ Recomendación generada correctamente', 'success');
                 } else {
                     throw new Error('Respuesta vacía de Ollama');
@@ -2512,7 +2785,7 @@ Genera una recomendación que combine: sugerencias de optimización, análisis d
                 }
 
                 ollamaRecommendation = '';
-                localStorage.setItem('ollamaRecommendation', '');
+                saveOllamaConfig();
 
                 // Actualizar UI con mensaje de error
                 const contentEl = document.getElementById('ollama-recommendations-content');
