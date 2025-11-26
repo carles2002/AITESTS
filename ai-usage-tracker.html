@@ -532,6 +532,204 @@
             font-size: 0.9em;
             color: #666;
         }
+
+        /* Estilos para Recomendaciones Ollama */
+        .recommendations-section {
+            background: linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%);
+            border-left: 4px solid #667eea;
+            padding: 25px;
+            border-radius: 10px;
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+
+        .recommendations-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .recommendations-header h3 {
+            color: #667eea;
+            font-size: 1.2em;
+            margin: 0;
+            font-weight: bold;
+        }
+
+        .recommendations-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .switch .slider-toggle {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .switch .slider-toggle:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        .switch input:checked + .slider-toggle {
+            background-color: #2ecc71;
+        }
+
+        .switch input:checked + .slider-toggle:before {
+            transform: translateX(26px);
+        }
+
+        .btn-regenerate {
+            padding: 8px 16px;
+            font-size: 0.9em;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-regenerate:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 3px 10px rgba(102,126,234,0.3);
+        }
+
+        .btn-regenerate:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-regenerate.loading {
+            pointer-events: none;
+        }
+
+        .btn-regenerate .spinner {
+            display: none;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #ffffff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .btn-regenerate.loading .spinner {
+            display: inline-block;
+        }
+
+        .btn-regenerate.loading .btn-icon {
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #ollama-recommendations-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+        }
+
+        .recommendation-text {
+            color: #333;
+            font-size: 0.95em;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .loading-state {
+            color: #999;
+            font-style: italic;
+            text-align: center;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .loading-state .spinner-large {
+            width: 20px;
+            height: 20px;
+            border: 3px solid #667eea;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .error-state {
+            color: #ff4757;
+            padding: 15px;
+            background: #ffe0e0;
+            border-radius: 5px;
+            text-align: center;
+            width: 100%;
+        }
+
+        .no-data-state {
+            color: #999;
+            font-style: italic;
+            text-align: center;
+            width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .recommendations-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .recommendations-controls {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .btn-regenerate {
+                flex: 1;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -739,6 +937,16 @@
 
         // Modo de entrada: 'consumed' (consumido) o 'remaining' (restante)
         let inputMode = localStorage.getItem('inputMode') || 'consumed';
+
+        // Configuración de Ollama para recomendaciones
+        const OLLAMA_URL = 'http://localhost:11434/api/generate';
+        const OLLAMA_MODEL = 'gemma3:1b';
+        const OLLAMA_TIMEOUT = 30000; // 30 segundos
+
+        // Estado de recomendaciones Ollama
+        let recommendationsEnabled = localStorage.getItem('recommendationsEnabled') !== 'false'; // true por defecto
+        let ollamaRecommendation = localStorage.getItem('ollamaRecommendation') || '';
+        let isGeneratingRecommendation = false;
 
         function toggleInputMode() {
             inputMode = inputMode === 'consumed' ? 'remaining' : 'consumed';
@@ -1258,9 +1466,41 @@
                         <div class="chart">${createLineChart(costOverTime, timeLabels, 'Coste', '#2ecc71', '€')}</div>
                     </div>
                 </div>
+
+                ${recommendationsEnabled ? `
+                <div class="recommendations-section" id="ollama-recommendations-container">
+                    <div class="recommendations-header">
+                        <h3>💡 Recomendaciones (IA - Ollama)</h3>
+                        <div class="recommendations-controls">
+                            <label class="switch">
+                                <input type="checkbox" id="recommendationsToggle" ${recommendationsEnabled ? 'checked' : ''}>
+                                <span class="slider-toggle"></span>
+                            </label>
+                            <button id="regenerateRecommendations" class="btn-regenerate" ${isGeneratingRecommendation ? 'disabled' : ''}>
+                                <span class="spinner"></span>
+                                <span class="btn-icon">🔄</span>
+                                <span>Regenerar</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="ollama-recommendations-content">
+                        ${isGeneratingRecommendation
+                            ? '<div class="loading-state"><div class="spinner-large"></div>Generando recomendación con Ollama...</div>'
+                            : ollamaRecommendation
+                                ? '<p class="recommendation-text">' + ollamaRecommendation + '</p>'
+                                : '<div class="no-data-state">Presiona "Regenerar" para obtener una recomendación basada en tus estadísticas del día.</div>'
+                        }
+                    </div>
+                </div>
+                ` : ''}
             `;
 
             content.innerHTML = html;
+
+            // Inicializar event listeners para recomendaciones si está habilitado
+            if (recommendationsEnabled) {
+                initializeRecommendationsListeners();
+            }
         }
 
         function updateWeeklyStats() {
@@ -2089,6 +2329,210 @@
             summaryMsg += `\n📊 Total en historial: ${dailyHistory.length} día(s)`;
 
             showAlert(summaryMsg, 'success');
+        }
+
+        // ==========================================
+        // FUNCIONES DE RECOMENDACIONES OLLAMA
+        // ==========================================
+
+        // Inicializar event listeners para los controles de recomendaciones
+        function initializeRecommendationsListeners() {
+            const toggle = document.getElementById('recommendationsToggle');
+            const regenerateBtn = document.getElementById('regenerateRecommendations');
+
+            if (toggle) {
+                // Remover listeners previos para evitar duplicados
+                toggle.removeEventListener('change', handleRecommendationToggle);
+                toggle.addEventListener('change', handleRecommendationToggle);
+            }
+
+            if (regenerateBtn) {
+                // Remover listeners previos para evitar duplicados
+                regenerateBtn.removeEventListener('click', generateOllamaRecommendation);
+                regenerateBtn.addEventListener('click', generateOllamaRecommendation);
+            }
+        }
+
+        // Manejar el toggle de recomendaciones
+        function handleRecommendationToggle(event) {
+            recommendationsEnabled = event.target.checked;
+            localStorage.setItem('recommendationsEnabled', recommendationsEnabled.toString());
+
+            if (!recommendationsEnabled) {
+                // Ocultar la sección de recomendaciones
+                ollamaRecommendation = '';
+                localStorage.setItem('ollamaRecommendation', '');
+            }
+
+            // Refrescar la vista
+            updateTodayStats();
+
+            showAlert(
+                recommendationsEnabled
+                    ? '✅ Recomendaciones Ollama activadas'
+                    : '❌ Recomendaciones Ollama desactivadas',
+                'success'
+            );
+        }
+
+        // Recopilar estadísticas del día para enviar a Ollama
+        function collectDailyStats() {
+            let allPromptsToday = [...currentSessionPrompts];
+            completedSessions.forEach(session => {
+                allPromptsToday = allPromptsToday.concat(session.prompts);
+            });
+
+            if (allPromptsToday.length === 0) {
+                return null;
+            }
+
+            const totalUsageToday = completedSessions.reduce((sum, s) => sum + s.totalUsage, 0) + lastUsage;
+            const totalCostToday = dailyCost;
+            const totalPromptsToday = allPromptsToday.length;
+            const avgUsagePerPrompt = totalUsageToday / totalPromptsToday;
+            const avgCostPerPrompt = totalCostToday / totalPromptsToday;
+
+            // Conteo por modelo
+            const modelCounts = { Sonnet: 0, Haiku: 0, Opus: 0 };
+            allPromptsToday.forEach(p => {
+                if (modelCounts.hasOwnProperty(p.model)) {
+                    modelCounts[p.model]++;
+                }
+            });
+
+            // Calcular prompts restantes estimados (basado en límite de 95%)
+            const remainingUsage = 95 - lastUsage;
+            const estimatedRemainingPrompts = avgUsagePerPrompt > 0 ? Math.floor(remainingUsage / avgUsagePerPrompt) : 0;
+
+            // Calcular hora pico (hora con más prompts)
+            const hourCounts = {};
+            allPromptsToday.forEach(p => {
+                const hour = new Date(p.timestamp).getHours();
+                hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+            });
+            const peakHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0];
+            const peakHourFormatted = peakHour ? `${peakHour[0]}:00` : 'N/A';
+
+            return {
+                fecha: new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+                totalPrompts: totalPromptsToday,
+                usoTotal: totalUsageToday.toFixed(2),
+                usoRestante: (100 - lastUsage).toFixed(2),
+                costeTotal: totalCostToday.toFixed(2),
+                costeMedioPorPrompt: avgCostPerPrompt.toFixed(3),
+                usoMedioPorPrompt: avgUsagePerPrompt.toFixed(2),
+                sesionesCompletadas: completedSessions.length,
+                sesionActual: currentSessionNumber,
+                promptsRestantesEstimados: estimatedRemainingPrompts,
+                horaPico: peakHourFormatted,
+                modelosSonnet: modelCounts.Sonnet,
+                modelosHaiku: modelCounts.Haiku,
+                modelosOpus: modelCounts.Opus
+            };
+        }
+
+        // Generar recomendación usando Ollama
+        async function generateOllamaRecommendation() {
+            // Verificar si ya está generando
+            if (isGeneratingRecommendation) {
+                return;
+            }
+
+            // Recopilar estadísticas
+            const stats = collectDailyStats();
+            if (!stats) {
+                showAlert('❌ No hay datos del día para generar recomendaciones', 'warning');
+                return;
+            }
+
+            // Marcar como generando
+            isGeneratingRecommendation = true;
+            updateTodayStats(); // Actualizar UI para mostrar loading
+
+            // Crear el prompt para Ollama
+            const prompt = `Eres un asistente experto en productividad y optimización de recursos. Basándote en estas estadísticas de consumo de IA del día actual, genera UNA recomendación breve y útil en español (máximo 50 palabras). Sé conciso, práctico y directo.
+
+Estadísticas del día (${stats.fecha}):
+- Prompts realizados: ${stats.totalPrompts}
+- Uso total de la sesión: ${stats.usoTotal}%
+- Uso restante: ${stats.usoRestante}%
+- Coste total: ${stats.costeTotal}€
+- Coste medio por prompt: ${stats.costeMedioPorPrompt}€
+- Uso medio por prompt: ${stats.usoMedioPorPrompt}%
+- Sesión actual: ${stats.sesionActual} de 2
+- Prompts restantes estimados: ${stats.promptsRestantesEstimados}
+- Hora con más actividad: ${stats.horaPico}
+- Uso por modelo - Sonnet: ${stats.modelosSonnet}, Haiku: ${stats.modelosHaiku}, Opus: ${stats.modelosOpus}
+
+Genera una recomendación que combine: sugerencias de optimización, análisis de eficiencia o recordatorios sobre límites. Responde SOLO con la recomendación, sin explicaciones adicionales ni formato especial.`;
+
+            try {
+                // Crear controlador de abort para timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT);
+
+                const response = await fetch(OLLAMA_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: OLLAMA_MODEL,
+                        prompt: prompt,
+                        stream: false,
+                        options: {
+                            temperature: 0.7,
+                            top_p: 0.9,
+                            num_predict: 100 // Limitar tokens de salida
+                        }
+                    }),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.response && data.response.trim()) {
+                    ollamaRecommendation = data.response.trim();
+                    localStorage.setItem('ollamaRecommendation', ollamaRecommendation);
+                    showAlert('✅ Recomendación generada correctamente', 'success');
+                } else {
+                    throw new Error('Respuesta vacía de Ollama');
+                }
+
+            } catch (error) {
+                console.error('Error al generar recomendación:', error);
+
+                let errorMessage = 'Error desconocido';
+                if (error.name === 'AbortError') {
+                    errorMessage = 'Timeout: Ollama tardó demasiado en responder (>30s)';
+                } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorMessage = 'No se puede conectar con Ollama. Verifica que esté ejecutándose en localhost:11434';
+                } else if (error.message.includes('HTTP')) {
+                    errorMessage = error.message;
+                } else {
+                    errorMessage = error.message;
+                }
+
+                ollamaRecommendation = '';
+                localStorage.setItem('ollamaRecommendation', '');
+
+                // Actualizar UI con mensaje de error
+                const contentEl = document.getElementById('ollama-recommendations-content');
+                if (contentEl) {
+                    contentEl.innerHTML = `<div class="error-state">⚠️ ${errorMessage}</div>`;
+                }
+
+                showAlert(`❌ Error: ${errorMessage}`, 'danger');
+            } finally {
+                isGeneratingRecommendation = false;
+                updateTodayStats(); // Actualizar UI
+            }
         }
 
         function updateAll() {
