@@ -2241,6 +2241,14 @@
                 showAlert(displayMsg, 'success');
                 console.log('✅ Prompt registrado exitosamente');
 
+                // Auto-regenerar recomendación si está activado
+                if (autoRegenerateEnabled && recommendationsEnabled) {
+                    console.log('🔄 Auto-regeneración activada, generando nueva recomendación...');
+                    setTimeout(() => {
+                        generateOllamaRecommendation();
+                    }, 500); // Pequeño delay para que se vea la UI actualizada primero
+                }
+
             } catch(error) {
                 console.error('💥 ERROR CRÍTICO al registrar prompt:', error);
                 showAlert('❌ Error al registrar prompt: ' + error.message, 'danger');
@@ -2637,12 +2645,19 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
         // Inicializar event listeners para los controles de recomendaciones
         function initializeRecommendationsListeners() {
             const toggle = document.getElementById('recommendationsToggle');
+            const autoRegenerateToggle = document.getElementById('autoRegenerateToggle');
             const regenerateBtn = document.getElementById('regenerateRecommendations');
 
             if (toggle) {
                 // Remover listeners previos para evitar duplicados
                 toggle.removeEventListener('change', handleRecommendationToggle);
                 toggle.addEventListener('change', handleRecommendationToggle);
+            }
+
+            if (autoRegenerateToggle) {
+                // Remover listeners previos para evitar duplicados
+                autoRegenerateToggle.removeEventListener('change', handleAutoRegenerateToggle);
+                autoRegenerateToggle.addEventListener('change', handleAutoRegenerateToggle);
             }
 
             if (regenerateBtn) {
@@ -2664,6 +2679,19 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
                 recommendationsEnabled
                     ? '✅ Recomendaciones Ollama activadas'
                     : '❌ Recomendaciones Ollama desactivadas',
+                'success'
+            );
+        }
+
+        // Manejar el toggle de auto-regeneración
+        function handleAutoRegenerateToggle(event) {
+            autoRegenerateEnabled = event.target.checked;
+            saveOllamaConfig();
+
+            showAlert(
+                autoRegenerateEnabled
+                    ? '🔄 Auto-regeneración activada: se generará una nueva recomendación al registrar cada prompt'
+                    : '⏸️ Auto-regeneración desactivada: usa el botón "Regenerar" manualmente',
                 'success'
             );
         }
