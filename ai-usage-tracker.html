@@ -2697,6 +2697,18 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
         }
 
         // Generar recomendación usando Ollama
+        // Procesar markdown básico en respuestas de Ollama
+        function processMarkdownToHtml(text) {
+            if (!text) return text;
+            // Convertir **texto** a <strong>texto</strong>
+            text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            // Convertir *texto* a <em>texto</em>
+            text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            // Convertir saltos de línea a <br>
+            text = text.replace(/\n/g, '<br>');
+            return text;
+        }
+
         async function generateOllamaRecommendation() {
             // Verificar si ya está generando
             if (isGeneratingRecommendation) {
@@ -2714,22 +2726,48 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
             isGeneratingRecommendation = true;
             updateTodayStats(); // Actualizar UI para mostrar loading
 
-            // Crear el prompt para Ollama
-            const prompt = `Eres un asistente experto en productividad y optimización de recursos. Basándote en estas estadísticas de consumo de IA del día actual, genera UNA recomendación breve y útil en español (máximo 50 palabras). Sé conciso, práctico y directo.
+            // Crear el prompt para Ollama con análisis dinámico
+            const porcentajeUsado = (stats.usoTotal / 95 * 100).toFixed(1);
+            const estadoUso = stats.usoTotal > 80 ? 'CRÍTICO' : stats.usoTotal > 55 ? 'MODERADO' : 'HOLGADO';
 
-Estadísticas del día (${stats.fecha}):
-- Prompts realizados: ${stats.totalPrompts}
-- Uso total de la sesión: ${stats.usoTotal}%
-- Uso restante: ${stats.usoRestante}%
-- Coste total: ${stats.costeTotal}€
-- Coste medio por prompt: ${stats.costeMedioPorPrompt}€
-- Uso medio por prompt: ${stats.usoMedioPorPrompt}%
-- Sesión actual: ${stats.sesionActual} de 2
+            const prompt = `Eres un asistente experto en optimización de uso de Claude AI. Analiza las estadísticas y genera UNA recomendación personalizada en español (máximo 60 palabras). Usa texto plano sin asteriscos.
+
+📊 ESTADÍSTICAS DEL DÍA (${stats.fecha}):
+
+Uso de Sesión:
+- Uso actual: ${stats.usoTotal}% de 95% límite (límite real = fin de sesión)
+- Uso restante: ${stats.usoRestante}% disponible
+- Estado: ${estadoUso} (${porcentajeUsado}% del límite teórico)
+- Sesión ${stats.sesionActual} de 2 sesiones diarias
+
+Prompts:
+- Total hoy: ${stats.totalPrompts} prompts
 - Prompts restantes estimados: ${stats.promptsRestantesEstimados}
-- Hora con más actividad: ${stats.horaPico}
-- Uso por modelo - Sonnet: ${stats.modelosSonnet}, Haiku: ${stats.modelosHaiku}, Opus: ${stats.modelosOpus}
+- Uso medio por prompt: ${stats.usoMedioPorPrompt}%
 
-Genera una recomendación que combine: sugerencias de optimización, análisis de eficiencia o recordatorios sobre límites. Responde SOLO con la recomendación, sin explicaciones adicionales ni formato especial.`;
+Costes:
+- Coste total hoy: ${stats.costeTotal}€ de 4.10€ presupuesto diario
+- Coste medio por prompt: ${stats.costeMedioPorPrompt}€
+- Presupuesto restante: ${(4.10 - parseFloat(stats.costeTotal)).toFixed(2)}€
+
+Modelos utilizados:
+- Sonnet (más potente, más caro): ${stats.modelosSonnet} prompts
+- Haiku (rápido, económico): ${stats.modelosHaiku} prompts
+- Opus (muy potente, muy caro): ${stats.modelosOpus} prompts
+
+Actividad:
+- Hora pico de actividad: ${stats.horaPico}
+- Sesiones completadas hoy: ${stats.sesionesCompletadas}
+
+🎯 INSTRUCCIONES:
+
+SI uso > 80%: Advierte sobre proximidad al límite (rojo), recomienda Haiku inmediatamente para prompts simples.
+SI uso 30-80%: Análisis equilibrado. Recomienda balance entre modelos. Sugiere Sonnet solo si es necesario.
+SI uso < 30%: Estado tranquilo. Permite usar Sonnet o Opus sin preocupación. Aprovecha capacidad.
+
+Siempre incluye: 1) Análisis estado actual (crítico/normal/holgado), 2) Modelo recomendado, 3) Cuántos prompts estimados le quedan.
+
+Responde SOLO con la recomendación, sin explicaciones adicionales, sin asteriscos, sin markdown. Máximo 60 palabras.`;
 
             try {
                 // Crear controlador de abort para timeout
@@ -2763,7 +2801,7 @@ Genera una recomendación que combine: sugerencias de optimización, análisis d
                 const data = await response.json();
 
                 if (data.response && data.response.trim()) {
-                    ollamaRecommendation = data.response.trim();
+                    ollamaRecommendation = processMarkdownToHtml(data.response.trim());
                     saveOllamaConfig();
                     showAlert('✅ Recomendación generada correctamente', 'success');
                 } else {
