@@ -2675,38 +2675,41 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
             );
         }
 
-        // Recopilar estadísticas del día para enviar a Ollama
+        // Recopilar estadísticas de la SESIÓN ACTUAL para enviar a Ollama
+        // IMPORTANTE: Solo datos de la sesión actual (5h), no del día completo
         function collectDailyStats() {
-            let allPromptsToday = [...currentSessionPrompts];
-            completedSessions.forEach(session => {
-                allPromptsToday = allPromptsToday.concat(session.prompts);
-            });
+            // Solo usar prompts de la sesión actual
+            const sessionPrompts = currentSessionPrompts;
 
-            if (allPromptsToday.length === 0) {
+            if (sessionPrompts.length === 0) {
                 return null;
             }
 
-            const totalUsageToday = completedSessions.reduce((sum, s) => sum + s.totalUsage, 0) + lastUsage;
-            const totalCostToday = dailyCost;
-            const totalPromptsToday = allPromptsToday.length;
-            const avgUsagePerPrompt = totalUsageToday / totalPromptsToday;
-            const avgCostPerPrompt = totalCostToday / totalPromptsToday;
+            // Uso y coste SOLO de la sesión actual
+            const totalUsageSession = lastUsage;  // Uso acumulado de la sesión actual
+            const totalPromptsSession = sessionPrompts.length;
 
-            // Conteo por modelo
+            // Calcular coste de la sesión actual
+            const sessionCost = sessionPrompts.reduce((sum, p) => sum + p.cost, 0);
+
+            const avgUsagePerPrompt = totalUsageSession / totalPromptsSession;
+            const avgCostPerPrompt = sessionCost / totalPromptsSession;
+
+            // Conteo por modelo (solo sesión actual)
             const modelCounts = { Sonnet: 0, Haiku: 0, Opus: 0 };
-            allPromptsToday.forEach(p => {
+            sessionPrompts.forEach(p => {
                 if (modelCounts.hasOwnProperty(p.model)) {
                     modelCounts[p.model]++;
                 }
             });
 
-            // Calcular prompts restantes estimados (basado en límite de 95%)
+            // Calcular prompts restantes estimados (basado en límite de 95% POR SESIÓN)
             const remainingUsage = 95 - lastUsage;
             const estimatedRemainingPrompts = avgUsagePerPrompt > 0 ? Math.floor(remainingUsage / avgUsagePerPrompt) : 0;
 
-            // Calcular hora pico (hora con más prompts)
+            // Calcular hora pico (solo sesión actual)
             const hourCounts = {};
-            allPromptsToday.forEach(p => {
+            sessionPrompts.forEach(p => {
                 const hour = new Date(p.timestamp).getHours();
                 hourCounts[hour] = (hourCounts[hour] || 0) + 1;
             });
@@ -2715,13 +2718,13 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
 
             return {
                 fecha: new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-                totalPrompts: totalPromptsToday,
-                usoTotal: totalUsageToday.toFixed(2),
-                usoRestante: (100 - lastUsage).toFixed(2),
-                costeTotal: totalCostToday.toFixed(2),
+                totalPrompts: totalPromptsSession,
+                usoTotal: totalUsageSession.toFixed(2),
+                usoRestante: (95 - lastUsage).toFixed(2),  // Restante hasta el límite de 95%
+                costeTotal: sessionCost.toFixed(2),
                 costeMedioPorPrompt: avgCostPerPrompt.toFixed(3),
                 usoMedioPorPrompt: avgUsagePerPrompt.toFixed(2),
-                sesionesCompletadas: completedSessions.length,
+                sesionesCompletadas: completedSessions.length,  // Info contextual del día
                 sesionActual: currentSessionNumber,
                 promptsRestantesEstimados: estimatedRemainingPrompts,
                 horaPico: peakHourFormatted,
@@ -2765,42 +2768,49 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
             const porcentajeUsado = (stats.usoTotal / 95 * 100).toFixed(1);
             const estadoUso = stats.usoTotal > 80 ? 'CRÍTICO' : stats.usoTotal > 55 ? 'MODERADO' : 'HOLGADO';
 
-            const prompt = `Eres un asistente experto en optimización de uso de Claude AI. Analiza las estadísticas y genera UNA recomendación personalizada en español (máximo 60 palabras). Usa texto plano sin asteriscos.
+            const prompt = `Eres un asistente experto en optimización de uso de Claude AI. Analiza las estadísticas de la SESIÓN ACTUAL y genera UNA recomendación personalizada en español. Usa texto plano sin asteriscos.
 
-📊 ESTADÍSTICAS DEL DÍA (${stats.fecha}):
+⚠️ CONTEXTO IMPORTANTE:
+- Claude tiene un límite de 95% POR SESIÓN de 5 horas
+- Cada día permite 2 sesiones independientes de 5h cada una
+- Los datos siguientes son SOLO de la sesión actual (Sesión ${stats.sesionActual}/2)
+- Al llegar a 95%, la sesión termina y debe iniciar una nueva
 
-Uso de Sesión:
-- Uso actual: ${stats.usoTotal}% de 95% límite (límite real = fin de sesión)
-- Uso restante: ${stats.usoRestante}% disponible
-- Estado: ${estadoUso} (${porcentajeUsado}% del límite teórico)
-- Sesión ${stats.sesionActual} de 2 sesiones diarias
+📊 ESTADÍSTICAS DE LA SESIÓN ACTUAL (${stats.fecha}):
 
-Prompts:
-- Total hoy: ${stats.totalPrompts} prompts
-- Prompts restantes estimados: ${stats.promptsRestantesEstimados}
+Uso de esta Sesión (5h):
+- Uso acumulado: ${stats.usoTotal}% de 95% límite de sesión
+- Uso restante: ${stats.usoRestante}% hasta fin de sesión
+- Estado: ${estadoUso} (${porcentajeUsado}% del límite)
+- Esta es la Sesión ${stats.sesionActual} de 2 sesiones diarias posibles
+
+Prompts en esta Sesión:
+- Total en esta sesión: ${stats.totalPrompts} prompts
+- Prompts restantes estimados: ${stats.promptsRestantesEstimados} (hasta 95%)
 - Uso medio por prompt: ${stats.usoMedioPorPrompt}%
 
-Costes:
-- Coste total hoy: ${stats.costeTotal}€ de 4.10€ presupuesto diario
+Costes de esta Sesión:
+- Coste acumulado en sesión: ${stats.costeTotal}€
 - Coste medio por prompt: ${stats.costeMedioPorPrompt}€
-- Presupuesto restante: ${(4.10 - parseFloat(stats.costeTotal)).toFixed(2)}€
 
-Modelos utilizados:
-- Sonnet (más potente, más caro): ${stats.modelosSonnet} prompts
-- Haiku (rápido, económico): ${stats.modelosHaiku} prompts
-- Opus (muy potente, muy caro): ${stats.modelosOpus} prompts
+Modelos utilizados en esta Sesión:
+- Sonnet (potente, caro ~0.075€/prompt): ${stats.modelosSonnet} prompts
+- Haiku (rápido, económico ~0.005€/prompt): ${stats.modelosHaiku} prompts
+- Opus (muy potente, muy caro ~0.15€/prompt): ${stats.modelosOpus} prompts
 
-Actividad:
-- Hora pico de actividad: ${stats.horaPico}
-- Sesiones completadas hoy: ${stats.sesionesCompletadas}
+Actividad de esta Sesión:
+- Hora pico: ${stats.horaPico}
+- Sesiones completadas hoy antes de esta: ${stats.sesionesCompletadas}
 
 🎯 INSTRUCCIONES:
 
-SI uso > 80%: Advierte sobre proximidad al límite (rojo), recomienda Haiku inmediatamente para prompts simples.
-SI uso 30-80%: Análisis equilibrado. Recomienda balance entre modelos. Sugiere Sonnet solo si es necesario.
-SI uso < 30%: Estado tranquilo. Permite usar Sonnet o Opus sin preocupación. Aprovecha capacidad.
+SI uso > 80%: ALERTA CRÍTICA - Quedan pocos prompts. Recomienda Haiku ÚNICAMENTE para estirar la sesión.
+SI uso 30-80%: Análisis moderado. Balance entre modelos según necesidad.
+SI uso < 30%: Sesión tranquila. Puede usar modelos potentes sin preocupación.
 
-Siempre incluye: 1) Análisis estado actual , 2) Modelo recomendado, 3) Cuántos prompts estimados le quedan. 4) A que velocidad consume y si es mucha o poca y cual debería ser la recomendada
+IMPORTANTE: Recuerda que al llegar a 95%, esta sesión TERMINA. Si necesita más, deberá iniciar Sesión ${stats.sesionActual + 1}.
+
+Siempre incluye: 1) Análisis estado actual, 2) Modelo recomendado, 3) Cuántos prompts estimados le quedan. 4) A que velocidad consume y si es mucha o poca y cual debería ser la recomendada
 
 Responde SOLO con la recomendación, sin explicaciones adicionales, sin asteriscos, sin markdown. Máximo 200 palabras. Pero si que haz uso de iconos`;
 
