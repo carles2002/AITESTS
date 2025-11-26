@@ -112,11 +112,27 @@ Buscar la función `generateOllamaRecommendation()` (~línea 2434) y modificar e
 
 Para probar la integración con Ollama:
 
-1. Asegurar que Ollama está corriendo: `ollama serve`
-2. Verificar modelo instalado: `ollama list`
-3. Si no está gemma3:1b: `ollama pull gemma3:1b`
-4. Abrir la aplicación y registrar al menos un prompt
-5. En "Estadísticas del Día Actual", presionar "Regenerar"
+1. **Configurar CORS** (IMPORTANTE):
+   ```powershell
+   # En PowerShell como Administrador
+   [System.Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', '*', 'Machine')
+
+   # O bien, para sesión actual:
+   $env:OLLAMA_ORIGINS="*"
+   ```
+
+2. Asegurar que Ollama está corriendo: `ollama serve`
+3. Verificar modelo instalado: `ollama list`
+4. Si no está gemma3:1b: `ollama pull gemma3:1b`
+5. Abrir la aplicación y registrar al menos un prompt
+6. En "Estadísticas del Día Actual", presionar "Regenerar"
+
+### Troubleshooting
+
+**Error 403 / CORS blocked:**
+- Causa: Ollama no tiene configurado CORS
+- Solución: Configurar `OLLAMA_ORIGINS=*` antes de iniciar Ollama
+- Verificar: Abrir consola del navegador (F12) y ver si hay errores de CORS
 
 ## Dependencias Externas
 

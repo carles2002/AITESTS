@@ -497,7 +497,34 @@ La aplicación incluye una funcionalidad de recomendaciones inteligentes basadas
 
 1. Descarga e instala Ollama desde: https://ollama.ai/
 2. Ejecuta en terminal: `ollama pull gemma3:1b`
-3. Asegúrate de que Ollama esté ejecutándose: `ollama serve`
+
+3. **Configurar CORS para permitir peticiones desde el navegador:**
+
+   **En Windows (PowerShell como Administrador):**
+   ```powershell
+   # Configurar variable de entorno permanente
+   [System.Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', '*', 'Machine')
+
+   # Reiniciar el servicio de Ollama
+   Stop-Service Ollama
+   Start-Service Ollama
+   ```
+
+   **O bien, ejecutar Ollama manualmente con CORS:**
+   ```powershell
+   $env:OLLAMA_ORIGINS="*"
+   ollama serve
+   ```
+
+   **En Linux/Mac:**
+   ```bash
+   # Opción 1: Ejecutar con variable de entorno
+   OLLAMA_ORIGINS="*" ollama serve
+
+   # Opción 2: Añadir permanentemente (editar ~/.bashrc o ~/.zshrc)
+   export OLLAMA_ORIGINS="*"
+   ```
+
 4. Verifica que esté disponible en: `http://localhost:11434`
 
 ### Uso de las Recomendaciones
@@ -520,6 +547,12 @@ La aplicación incluye una funcionalidad de recomendaciones inteligentes basadas
 
 **P: ¿Qué pasa si Ollama no está ejecutándose?**
 R: Verás un mensaje de error indicando que no se puede conectar. Las demás funcionalidades de la app seguirán funcionando normalmente.
+
+**P: Aparece error 403 o "Failed to fetch" al presionar Regenerar**
+R: Esto ocurre por problemas de CORS. Asegúrate de haber configurado la variable de entorno `OLLAMA_ORIGINS` (ver sección "Instalación de Ollama" arriba). Pasos:
+1. En PowerShell (Administrador): `$env:OLLAMA_ORIGINS="*"`
+2. Reinicia Ollama: `ollama serve`
+3. Recarga la página y prueba nuevamente
 
 **P: ¿Puedo usar otro modelo de Ollama?**
 R: Sí, puedes cambiar la constante `OLLAMA_MODEL` en el código JavaScript. Busca la línea `const OLLAMA_MODEL = 'gemma3:1b';` y cámbiala por el modelo que prefieras.
