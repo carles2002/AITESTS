@@ -94,6 +94,87 @@
             margin-top: 5px;
         }
 
+        /* Estilos para editor de tiempo personalizado */
+        .time-editor {
+            margin: 10px 0 5px 0;
+            padding: 12px 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 2px dashed #ddd;
+        }
+
+        .time-input-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        input.time-input[type="number"] {
+            width: 65px !important;
+            padding: 8px 5px !important;
+            font-size: 1.8em !important;
+            font-weight: bold !important;
+            text-align: center !important;
+            border: 2px solid #667eea !important;
+            border-radius: 8px !important;
+            background: white !important;
+            color: #333 !important;
+            box-sizing: border-box !important;
+            line-height: 1.2 !important;
+        }
+
+        input.time-input[type="number"]:focus {
+            outline: none !important;
+            border-color: #764ba2 !important;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15) !important;
+        }
+
+        input.time-input[type="number"]::placeholder {
+            font-size: 1.8em !important;
+            color: #ccc !important;
+        }
+
+        .time-unit {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 0 2px;
+        }
+
+        .btn-apply-time,
+        .btn-reset-time {
+            padding: 8px 16px;
+            font-size: 0.95em;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 3px;
+        }
+
+        .btn-apply-time {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-apply-time:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-reset-time {
+            background: #f0f0f0;
+            color: #666;
+        }
+
+        .btn-reset-time:hover {
+            background: #e0e0e0;
+            transform: scale(1.05);
+        }
+
         .input-section {
             background: white;
             padding: 30px;
@@ -821,25 +902,35 @@
 
             <div class="stat-card">
                 <h3>Fin de Sesión</h3>
-                <div class="stat-value" id="sessionEndTime" style="font-size: 1.5em;">--:--</div>
+                <div class="stat-value" id="sessionEndTime">--:--</div>
                 <div class="stat-label">hora estimada</div>
             </div>
 
             <div class="stat-card">
                 <h3>Tiempo Restante</h3>
                 <div class="stat-value" id="timeRemaining">0h 0m</div>
+                <div class="time-editor">
+                    <div class="time-input-group">
+                        <input type="number" id="customHours" min="0" max="10" placeholder="0" class="time-input">
+                        <span class="time-unit">h</span>
+                        <input type="number" id="customMinutes" min="0" max="59" placeholder="0" class="time-input">
+                        <span class="time-unit">m</span>
+                    </div>
+                    <button type="button" id="applyCustomTime" class="btn-apply-time">Aplicar</button>
+                    <button type="button" id="resetCustomTime" class="btn-reset-time" style="display: none;">Resetear</button>
+                </div>
                 <div class="stat-label">de sesión</div>
             </div>
 
             <div class="stat-card">
                 <h3>Prompts por Hora</h3>
-                <div class="stat-value" id="promptsCurrentHour" style="font-size: 1.3em;">0 / 0</div>
+                <div class="stat-value" id="promptsCurrentHour">0 / 0</div>
                 <div class="stat-label">uniforme / ritmo actual</div>
             </div>
 
             <div class="stat-card">
                 <h3>Prompts Proyectadas</h3>
-                <div class="stat-value" id="promptsProjected" style="font-size: 1.3em;">0 / 0</div>
+                <div class="stat-value" id="promptsProjected">0 / 0</div>
                 <div class="stat-label">necesarias / al ritmo actual</div>
             </div>
         </div>
@@ -1031,6 +1122,20 @@
             }
         }
 
+        function removeStorageItem(key) {
+            try {
+                if (usingSessionStorage) {
+                    sessionStorage.removeItem(key);
+                } else {
+                    localStorage.removeItem(key);
+                }
+                return true;
+            } catch (e) {
+                console.error(`Error al eliminar ${key} del storage:`, e);
+                return false;
+            }
+        }
+
         // Función segura para parsear JSON
         function safeJSONParse(str, defaultValue) {
             if (!str || str === 'null' || str === 'undefined') return defaultValue;
@@ -1075,6 +1180,7 @@
         let autoRegenerateEnabled = false; // Auto-regenerar recomendaciones al registrar prompt
         let ollamaRecommendation = '';
         let isGeneratingRecommendation = false;
+        let customRemainingTime = null; // Tiempo restante personalizado en minutos (null = usar cálculo automático)
 
         // Configuración de Ollama para recomendaciones
         const OLLAMA_URL = 'http://localhost:11434/api/generate';
@@ -1096,6 +1202,7 @@
                 recommendationsEnabled = getStorageItem('recommendationsEnabled') !== 'false';
                 autoRegenerateEnabled = getStorageItem('autoRegenerateEnabled') === 'true';
                 ollamaRecommendation = getStorageItem('ollamaRecommendation') || '';
+                customRemainingTime = getStorageItem('customRemainingTime') ? parseInt(getStorageItem('customRemainingTime')) : null;
 
                 console.log('✓ Datos cargados:', {
                     tipo: storageType,
@@ -1202,14 +1309,27 @@
                 const now = new Date();
                 const sessionElapsedMs = now - sessionStartTime;
                 const sessionElapsedHours = sessionElapsedMs / (60 * 60 * 1000);
-                const timeRemainingMs = sessionEndTimeDate - now;
+                let timeRemainingMs = sessionEndTimeDate - now;
+                let totalHoursRemaining = 0;
 
-                if (timeRemainingMs > 0) {
+                // Si hay tiempo personalizado, usarlo en lugar del calculado
+                if (customRemainingTime !== null) {
+                    // customRemainingTime está en minutos
+                    timeRemainingMs = customRemainingTime * 60 * 1000;
+                    totalHoursRemaining = customRemainingTime / 60;
+
+                    const hoursRemaining = Math.floor(customRemainingTime / 60);
+                    const minutesRemaining = customRemainingTime % 60;
+                    timeRemaining = `${hoursRemaining}h ${minutesRemaining}m ⚙️`;
+                } else if (timeRemainingMs > 0) {
                     const hoursRemaining = Math.floor(timeRemainingMs / (60 * 60 * 1000));
                     const minutesRemainingTotal = Math.floor(timeRemainingMs / (60 * 1000));
                     const minutesRemaining = minutesRemainingTotal % 60;
                     timeRemaining = `${hoursRemaining}h ${minutesRemaining}m`;
-                    const totalHoursRemaining = timeRemainingMs / (60 * 60 * 1000);
+                    totalHoursRemaining = timeRemainingMs / (60 * 60 * 1000);
+                }
+
+                if (timeRemainingMs > 0 || customRemainingTime !== null) {
 
                     // 4. Calcular prompts restantes hasta el 95%
                     const usageRemaining = 95 - totalUsageCurrentSession;
@@ -2376,6 +2496,10 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
                 currentSessionPrompts = [];
                 lastUsage = 0;
 
+                // Resetear el tiempo personalizado para la nueva sesión
+                customRemainingTime = null;
+                removeStorageItem('customRemainingTime');
+
                 saveData();
                 warnIfStorageAlmostFull(); // Verificar espacio después de guardar sesión
                 updateAll();
@@ -2431,6 +2555,10 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
                 lastUsage = 0;
                 dailyCost = 0;
                 completedSessions = [];
+
+                // Resetear el tiempo personalizado para el nuevo día
+                customRemainingTime = null;
+                removeStorageItem('customRemainingTime');
 
                 saveData();
                 warnIfStorageAlmostFull(); // Verificar espacio después de guardar historial
@@ -2674,6 +2802,105 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
                 'success'
             );
         }
+
+        // === FUNCIONES PARA TIEMPO PERSONALIZADO ===
+
+        // Inicializar event listeners para el tiempo personalizado
+        function initializeCustomTimeListeners() {
+            const applyBtn = document.getElementById('applyCustomTime');
+            const resetBtn = document.getElementById('resetCustomTime');
+            const hoursInput = document.getElementById('customHours');
+            const minutesInput = document.getElementById('customMinutes');
+
+            if (applyBtn) {
+                applyBtn.removeEventListener('click', applyCustomTime);
+                applyBtn.addEventListener('click', applyCustomTime);
+            }
+
+            if (resetBtn) {
+                resetBtn.removeEventListener('click', resetCustomTime);
+                resetBtn.addEventListener('click', resetCustomTime);
+            }
+
+            // Actualizar la UI si hay tiempo personalizado guardado
+            updateCustomTimeInputs();
+        }
+
+        // Aplicar tiempo personalizado
+        function applyCustomTime() {
+            const hoursInput = document.getElementById('customHours');
+            const minutesInput = document.getElementById('customMinutes');
+            const resetBtn = document.getElementById('resetCustomTime');
+
+            const hours = parseInt(hoursInput.value) || 0;
+            const minutes = parseInt(minutesInput.value) || 0;
+
+            if (hours === 0 && minutes === 0) {
+                showAlert('⚠️ Introduce un tiempo válido (horas y/o minutos)', 'error');
+                return;
+            }
+
+            // Guardar el tiempo en minutos
+            customRemainingTime = hours * 60 + minutes;
+            setStorageItem('customRemainingTime', customRemainingTime.toString());
+
+            // Mostrar botón de resetear
+            if (resetBtn) {
+                resetBtn.style.display = 'inline-block';
+            }
+
+            // Refrescar las estadísticas
+            updateTodayStats();
+
+            showAlert(`✓ Tiempo personalizado aplicado: ${hours}h ${minutes}m`, 'success');
+        }
+
+        // Resetear tiempo personalizado
+        function resetCustomTime() {
+            const hoursInput = document.getElementById('customHours');
+            const minutesInput = document.getElementById('customMinutes');
+            const resetBtn = document.getElementById('resetCustomTime');
+
+            // Limpiar el tiempo personalizado
+            customRemainingTime = null;
+            removeStorageItem('customRemainingTime');
+
+            // Limpiar los inputs
+            hoursInput.value = '';
+            minutesInput.value = '';
+
+            // Ocultar botón de resetear
+            if (resetBtn) {
+                resetBtn.style.display = 'none';
+            }
+
+            // Refrescar las estadísticas
+            updateTodayStats();
+
+            showAlert('✓ Tiempo automático restaurado', 'success');
+        }
+
+        // Actualizar los inputs con el tiempo personalizado guardado
+        function updateCustomTimeInputs() {
+            const hoursInput = document.getElementById('customHours');
+            const minutesInput = document.getElementById('customMinutes');
+            const resetBtn = document.getElementById('resetCustomTime');
+
+            if (customRemainingTime !== null) {
+                const hours = Math.floor(customRemainingTime / 60);
+                const minutes = customRemainingTime % 60;
+
+                if (hoursInput) hoursInput.value = hours;
+                if (minutesInput) minutesInput.value = minutes;
+                if (resetBtn) resetBtn.style.display = 'inline-block';
+            } else {
+                if (hoursInput) hoursInput.value = '';
+                if (minutesInput) minutesInput.value = '';
+                if (resetBtn) resetBtn.style.display = 'none';
+            }
+        }
+
+        // === FIN FUNCIONES TIEMPO PERSONALIZADO ===
 
         // Recopilar estadísticas de la SESIÓN ACTUAL para enviar a Ollama
         // IMPORTANTE: Solo datos de la sesión actual (5h), no del día completo
@@ -2944,6 +3171,7 @@ Responde SOLO con la recomendación, sin explicaciones adicionales, sin asterisc
 
         // Inicializar la aplicación
         updateInputModeUI(); // Establecer el modo de entrada correcto al cargar
+        initializeCustomTimeListeners(); // Inicializar listeners del tiempo personalizado
         updateAll();
     </script>
 </body>

@@ -15,6 +15,60 @@ AITESTS/
 
 ## Historial de Cambios
 
+### v2.3 - Tiempo Restante Personalizado (Diciembre 2025)
+
+**Funcionalidad añadida:**
+- Editor de tiempo restante personalizado en la píldora "Tiempo Restante"
+- Inputs editables para horas y minutos con botones "Aplicar" y "Resetear"
+- Recálculo automático de prompts por hora basado en tiempo personalizado
+- Indicador visual (⚙️) cuando se usa tiempo personalizado
+
+**Decisiones de diseño:**
+
+1. **Solo para sesión actual**: El tiempo personalizado solo afecta a la sesión actual. Al completar la sesión o iniciar un nuevo día, se resetea automáticamente al cálculo por defecto (5 horas desde el inicio de sesión).
+
+2. **Persistencia en localStorage**: Se guarda una nueva clave:
+   - `customRemainingTime`: number (minutos) | null (usar cálculo automático)
+
+3. **Reseteo automático**: El tiempo personalizado se limpia automáticamente en:
+   - `resetSession()`: Al iniciar una nueva sesión (5h)
+   - `endDay()`: Al finalizar el día y empezar uno nuevo
+
+4. **Integración con cálculos existentes**: Los cálculos de:
+   - Prompts por hora (uniforme/adaptado)
+   - Prompts proyectadas (necesarias/al ritmo actual)
+   - Tiempo restante de sesión
+
+   Todos usan el tiempo personalizado si está definido, caso contrario usan el cálculo automático.
+
+**Código añadido (secciones principales):**
+
+- **HTML** (líneas ~828-842): Estructura de inputs y botones en stat-card "Tiempo Restante"
+
+- **CSS** (líneas ~97-168): Estilos para `.time-editor`, `.time-input`, `.time-input-group`, `.btn-apply-time`, `.btn-reset-time`
+
+- **Variables globales** (línea ~1161):
+  ```javascript
+  let customRemainingTime = null; // null = automático, number = minutos personalizados
+  ```
+
+- **Funciones** (líneas ~2763-2860):
+  - `initializeCustomTimeListeners()`: Configura event listeners
+  - `applyCustomTime()`: Guarda el tiempo personalizado y actualiza cálculos
+  - `resetCustomTime()`: Limpia el tiempo personalizado y restaura cálculo automático
+  - `updateCustomTimeInputs()`: Actualiza los inputs con valores guardados
+
+- **Función auxiliar** (líneas ~1117-1129):
+  - `removeStorageItem()`: Función segura para eliminar keys del storage
+
+- **Modificación en `updateTodayStats()`** (líneas ~1290-1310): Lógica para usar tiempo personalizado en cálculos si está definido
+
+**Uso:**
+1. Introducir horas y/o minutos en los inputs de la píldora "Tiempo Restante"
+2. Presionar "Aplicar" para guardar y recalcular
+3. El tiempo restante muestra un icono ⚙️ para indicar que es personalizado
+4. Presionar "Resetear" para volver al cálculo automático
+
 ### v2.2 - Ollama AI Recommendations (Noviembre 2025)
 
 **Funcionalidad añadida:**
@@ -80,6 +134,7 @@ AITESTS/
 | `inputMode` | string | 'consumed' o 'remaining' |
 | `recommendationsEnabled` | string | 'true' o 'false' |
 | `ollamaRecommendation` | string | Última recomendación generada |
+| `customRemainingTime` | number | null | Tiempo restante personalizado en minutos (null = automático) |
 
 ### Prompt Object Structure
 
@@ -143,4 +198,4 @@ Para probar la integración con Ollama:
 
 ---
 
-*Última actualización: Noviembre 2025*
+*Última actualización: Diciembre 2025*
