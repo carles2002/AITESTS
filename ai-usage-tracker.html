@@ -1180,7 +1180,7 @@
         let autoRegenerateEnabled = false; // Auto-regenerar recomendaciones al registrar prompt
         let ollamaRecommendation = '';
         let isGeneratingRecommendation = false;
-        let customRemainingTime = null; // Tiempo restante personalizado en minutos (null = usar cálculo automático)
+        let customEndTime = null; // Hora de finalización personalizada (timestamp en ms, null = usar cálculo automático)
 
         // Configuración de Ollama para recomendaciones
         const OLLAMA_URL = 'http://localhost:11434/api/generate';
@@ -1202,7 +1202,7 @@
                 recommendationsEnabled = getStorageItem('recommendationsEnabled') !== 'false';
                 autoRegenerateEnabled = getStorageItem('autoRegenerateEnabled') === 'true';
                 ollamaRecommendation = getStorageItem('ollamaRecommendation') || '';
-                customRemainingTime = getStorageItem('customRemainingTime') ? parseInt(getStorageItem('customRemainingTime')) : null;
+                customEndTime = getStorageItem('customEndTime') ? parseInt(getStorageItem('customEndTime')) : null;
 
                 console.log('✓ Datos cargados:', {
                     tipo: storageType,
@@ -1313,14 +1313,19 @@
                 let totalHoursRemaining = 0;
 
                 // Si hay tiempo personalizado, usarlo en lugar del calculado
-                if (customRemainingTime !== null) {
-                    // customRemainingTime está en minutos
-                    timeRemainingMs = customRemainingTime * 60 * 1000;
-                    totalHoursRemaining = customRemainingTime / 60;
+                if (customEndTime !== null) {
+                    // Calcular tiempo restante desde ahora hasta customEndTime
+                    timeRemainingMs = customEndTime - now.getTime();
 
-                    const hoursRemaining = Math.floor(customRemainingTime / 60);
-                    const minutesRemaining = customRemainingTime % 60;
-                    timeRemaining = `${hoursRemaining}h ${minutesRemaining}m ⚙️`;
+                    if (timeRemainingMs > 0) {
+                        totalHoursRemaining = timeRemainingMs / (60 * 60 * 1000);
+                        const hoursRemaining = Math.floor(timeRemainingMs / (60 * 60 * 1000));
+                        const minutesRemainingTotal = Math.floor(timeRemainingMs / (60 * 1000));
+                        const minutesRemaining = minutesRemainingTotal % 60;
+                        timeRemaining = `${hoursRemaining}h ${minutesRemaining}m ⚙️`;
+                    } else {
+                        timeRemaining = '¡Sesión finalizada! ⚙️';
+                    }
                 } else if (timeRemainingMs > 0) {
                     const hoursRemaining = Math.floor(timeRemainingMs / (60 * 60 * 1000));
                     const minutesRemainingTotal = Math.floor(timeRemainingMs / (60 * 1000));
@@ -1329,7 +1334,7 @@
                     totalHoursRemaining = timeRemainingMs / (60 * 60 * 1000);
                 }
 
-                if (timeRemainingMs > 0 || customRemainingTime !== null) {
+                if (timeRemainingMs > 0 || (customEndTime !== null && timeRemainingMs > 0)) {
 
                     // 4. Calcular prompts restantes hasta el 95%
                     const usageRemaining = 95 - totalUsageCurrentSession;
@@ -2497,8 +2502,8 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
                 lastUsage = 0;
 
                 // Resetear el tiempo personalizado para la nueva sesión
-                customRemainingTime = null;
-                removeStorageItem('customRemainingTime');
+                customEndTime = null;
+                removeStorageItem('customEndTime');
 
                 saveData();
                 warnIfStorageAlmostFull(); // Verificar espacio después de guardar sesión
@@ -2557,8 +2562,8 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
                 completedSessions = [];
 
                 // Resetear el tiempo personalizado para el nuevo día
-                customRemainingTime = null;
-                removeStorageItem('customRemainingTime');
+                customEndTime = null;
+                removeStorageItem('customEndTime');
 
                 saveData();
                 warnIfStorageAlmostFull(); // Verificar espacio después de guardar historial
@@ -2840,9 +2845,14 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
                 return;
             }
 
-            // Guardar el tiempo en minutos
-            customRemainingTime = hours * 60 + minutes;
-            setStorageItem('customRemainingTime', customRemainingTime.toString());
+            // Calcular la hora de finalización: hora actual + tiempo ingresado
+            const now = new Date();
+            const totalMinutes = hours * 60 + minutes;
+            const endTime = new Date(now.getTime() + totalMinutes * 60 * 1000);
+
+            // Guardar el timestamp de la hora de finalización
+            customEndTime = endTime.getTime();
+            setStorageItem('customEndTime', customEndTime.toString());
 
             // Mostrar botón de resetear
             if (resetBtn) {
@@ -2862,8 +2872,8 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
             const resetBtn = document.getElementById('resetCustomTime');
 
             // Limpiar el tiempo personalizado
-            customRemainingTime = null;
-            removeStorageItem('customRemainingTime');
+            customEndTime = null;
+            removeStorageItem('customEndTime');
 
             // Limpiar los inputs
             hoursInput.value = '';
@@ -2886,13 +2896,25 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
             const minutesInput = document.getElementById('customMinutes');
             const resetBtn = document.getElementById('resetCustomTime');
 
-            if (customRemainingTime !== null) {
-                const hours = Math.floor(customRemainingTime / 60);
-                const minutes = customRemainingTime % 60;
+            if (customEndTime !== null) {
+                // Calcular el tiempo restante actual desde ahora hasta customEndTime
+                const now = new Date();
+                const remainingMs = customEndTime - now.getTime();
 
-                if (hoursInput) hoursInput.value = hours;
-                if (minutesInput) minutesInput.value = minutes;
-                if (resetBtn) resetBtn.style.display = 'inline-block';
+                if (remainingMs > 0) {
+                    const totalMinutes = Math.floor(remainingMs / (60 * 1000));
+                    const hours = Math.floor(totalMinutes / 60);
+                    const minutes = totalMinutes % 60;
+
+                    if (hoursInput) hoursInput.value = hours;
+                    if (minutesInput) minutesInput.value = minutes;
+                    if (resetBtn) resetBtn.style.display = 'inline-block';
+                } else {
+                    // Si el tiempo ya pasó, limpiar
+                    if (hoursInput) hoursInput.value = 0;
+                    if (minutesInput) minutesInput.value = 0;
+                    if (resetBtn) resetBtn.style.display = 'inline-block';
+                }
             } else {
                 if (hoursInput) hoursInput.value = '';
                 if (minutesInput) minutesInput.value = '';
@@ -3167,12 +3189,19 @@ Responde SOLO con la recomendación, sin explicaciones adicionales, sin asterisc
             updateWeeklyStats();
             updateEditDatesSection();
             updateRecommendations();
+            updateCustomTimeInputs();
         }
 
         // Inicializar la aplicación
         updateInputModeUI(); // Establecer el modo de entrada correcto al cargar
         initializeCustomTimeListeners(); // Inicializar listeners del tiempo personalizado
         updateAll();
+
+        // Actualizar estadísticas cada minuto para que el tiempo restante baje automáticamente
+        setInterval(() => {
+            updateTodayStats();
+            updateCustomTimeInputs();
+        }, 60000); // 60000ms = 1 minuto
     </script>
 </body>
 </html>

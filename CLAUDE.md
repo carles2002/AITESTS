@@ -28,7 +28,8 @@ AITESTS/
 1. **Solo para sesión actual**: El tiempo personalizado solo afecta a la sesión actual. Al completar la sesión o iniciar un nuevo día, se resetea automáticamente al cálculo por defecto (5 horas desde el inicio de sesión).
 
 2. **Persistencia en localStorage**: Se guarda una nueva clave:
-   - `customRemainingTime`: number (minutos) | null (usar cálculo automático)
+   - `customEndTime`: timestamp (milisegundos) | null (usar cálculo automático)
+   - Se guarda como timestamp (hora de finalización) para que el tiempo vaya bajando automáticamente
 
 3. **Reseteo automático**: El tiempo personalizado se limpia automáticamente en:
    - `resetSession()`: Al iniciar una nueva sesión (5h)
@@ -47,27 +48,32 @@ AITESTS/
 
 - **CSS** (líneas ~97-168): Estilos para `.time-editor`, `.time-input`, `.time-input-group`, `.btn-apply-time`, `.btn-reset-time`
 
-- **Variables globales** (línea ~1161):
+- **Variables globales** (línea ~1183):
   ```javascript
-  let customRemainingTime = null; // null = automático, number = minutos personalizados
+  let customEndTime = null; // Hora de finalización personalizada (timestamp en ms, null = usar cálculo automático)
   ```
 
-- **Funciones** (líneas ~2763-2860):
+- **Funciones** (líneas ~2806-2920):
   - `initializeCustomTimeListeners()`: Configura event listeners
-  - `applyCustomTime()`: Guarda el tiempo personalizado y actualiza cálculos
+  - `applyCustomTime()`: Calcula hora de finalización (ahora + tiempo ingresado) y la guarda
   - `resetCustomTime()`: Limpia el tiempo personalizado y restaura cálculo automático
-  - `updateCustomTimeInputs()`: Actualiza los inputs con valores guardados
+  - `updateCustomTimeInputs()`: Calcula tiempo restante desde ahora hasta customEndTime y actualiza inputs
 
 - **Función auxiliar** (líneas ~1117-1129):
   - `removeStorageItem()`: Función segura para eliminar keys del storage
 
-- **Modificación en `updateTodayStats()`** (líneas ~1290-1310): Lógica para usar tiempo personalizado en cálculos si está definido
+- **Modificación en `updateTodayStats()`** (líneas ~1315-1337): Lógica para calcular tiempo restante desde customEndTime
+
+- **Auto-actualización** (líneas ~3200-3204): setInterval que actualiza estadísticas cada minuto para que el tiempo vaya bajando automáticamente
 
 **Uso:**
 1. Introducir horas y/o minutos en los inputs de la píldora "Tiempo Restante"
-2. Presionar "Aplicar" para guardar y recalcular
-3. El tiempo restante muestra un icono ⚙️ para indicar que es personalizado
-4. Presionar "Resetear" para volver al cálculo automático
+2. Presionar "Aplicar" → Se guarda la hora de finalización (ahora + tiempo ingresado)
+3. El tiempo restante muestra un icono ⚙️ y va bajando automáticamente cada minuto
+4. Los inputs también se actualizan automáticamente mostrando el tiempo que queda
+5. Presionar "Resetear" para volver al cálculo automático
+
+**Nota importante:** El tiempo baja automáticamente porque se guarda como timestamp de finalización, no como duración estática. Cada minuto se recalcula la diferencia entre "ahora" y la hora de finalización guardada.
 
 ### v2.2 - Ollama AI Recommendations (Noviembre 2025)
 
@@ -134,7 +140,7 @@ AITESTS/
 | `inputMode` | string | 'consumed' o 'remaining' |
 | `recommendationsEnabled` | string | 'true' o 'false' |
 | `ollamaRecommendation` | string | Última recomendación generada |
-| `customRemainingTime` | number | null | Tiempo restante personalizado en minutos (null = automático) |
+| `customEndTime` | number | null | Timestamp de hora de finalización personalizada (null = automático) |
 
 ### Prompt Object Structure
 
