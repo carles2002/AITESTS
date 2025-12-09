@@ -2812,7 +2812,7 @@ IMPORTANTE: Recuerda que al llegar a 95%, esta sesión TERMINA. Si necesita más
 
 Siempre incluye: 1) Análisis estado actual, 2) Modelo recomendado, 3) Cuántos prompts estimados le quedan. 4) A que velocidad consume y si es mucha o poca y cual debería ser la recomendada
 
-Responde SOLO con la recomendación, sin explicaciones adicionales, sin asteriscos, sin markdown. Máximo 200 palabras. Pero si que haz uso de iconos`;
+Responde SOLO con la recomendación, sin explicaciones adicionales, sin asteriscos, sin markdown. Máximo 200 palabras. Pero si que haz uso de iconos. RESPONDE EN CORTO SIN ALARGARTE`;
 
             try {
                 // Crear controlador de abort para timeout
@@ -2831,7 +2831,7 @@ Responde SOLO con la recomendación, sin explicaciones adicionales, sin asterisc
                         options: {
                             temperature: 0.7,
                             top_p: 0.9,
-                            num_predict: 250 // Limitar tokens de salida
+                            num_predict: 400 // Limitar tokens de salida
                         }
                     }),
                     signal: controller.signal
