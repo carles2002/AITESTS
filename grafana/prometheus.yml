@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Métricas de Claude Code (via OTel Collector)
+  - job_name: 'claude-code-metrics'
+    static_configs:
+      - targets: ['otel-collector:8889']
+    honor_labels: true
+
+  # Métricas de Prometheus
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

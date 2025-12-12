@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker ps:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker network inspect:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(curl:*)",
+      "Bash(docker restart:*)",
+      "Bash(cut:*)",
+      "Bash(jq -r \".data.activeTargets[] | \"\"\\(.labels.job): \\(.health)\"\"\")",
+      "Bash(jq:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(timeout:*)",
+      "Bash(ping:*)",
+      "Bash(findstr:*)"
+    ]
+  }
+}
