@@ -14,7 +14,8 @@
       "Bash(docker-compose up:*)",
       "Bash(timeout:*)",
       "Bash(ping:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(dir:*)"
     ]
   }
 }
