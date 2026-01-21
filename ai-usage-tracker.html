@@ -175,6 +175,42 @@
             transform: scale(1.05);
         }
 
+        /* Botón de copiar tiempo actual */
+        .btn-copy-time {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 1px solid #93c5fd;
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            color: #1e3a8a;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin: 3px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+            vertical-align: middle;
+        }
+
+        .btn-copy-time:hover {
+            background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+            transform: scale(1.08);
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-copy-time:active {
+            transform: scale(0.92);
+        }
+
+        .btn-copy-time:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: #e5e7eb;
+        }
+
         .input-section {
             background: white;
             padding: 30px;
@@ -293,6 +329,85 @@
         .toggle-label {
             font-size: 0.95em;
             color: #666;
+        }
+
+        /* Estilos para el botón de sincronización con Claude.ai */
+        .sync-button-container {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn-sync {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+        }
+
+        .btn-sync:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.5);
+        }
+
+        .btn-sync:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-sync:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-sync.syncing {
+            background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+        }
+
+        .btn-sync.success {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        }
+
+        .btn-sync.error {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        .sync-icon {
+            font-size: 1.1em;
+            display: inline-block;
+        }
+
+        .btn-sync.syncing .sync-icon {
+            animation: rotate 1s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .sync-status {
+            font-size: 0.85em;
+            color: #666;
+            font-style: italic;
+        }
+
+        .sync-status.success {
+            color: #27ae60;
+        }
+
+        .sync-status.error {
+            color: #e74c3c;
         }
 
         .history-section, .stats-section {
@@ -918,6 +1033,9 @@
                     </div>
                     <button type="button" id="applyCustomTime" class="btn-apply-time">Aplicar</button>
                     <button type="button" id="resetCustomTime" class="btn-reset-time" style="display: none;">Resetear</button>
+                    <button type="button" id="copyCurrentTime" class="btn-copy-time" title="Copiar y aplicar tiempo actual">
+                        📋
+                    </button>
                 </div>
                 <div class="stat-label">de sesión</div>
             </div>
@@ -956,6 +1074,19 @@
                         placeholder="Ej: 15.5"
                         required
                     >
+                    <!-- Botón de sincronización con Claude.ai -->
+                    <div class="sync-button-container">
+                        <button
+                            type="button"
+                            id="syncFromClaudeBtn"
+                            class="btn-sync"
+                            onclick="syncFromClaude()"
+                        >
+                            <span class="sync-icon">🔄</span>
+                            <span class="sync-text">Sincronizar desde Claude.ai</span>
+                        </button>
+                        <span id="syncStatus" class="sync-status"></span>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="modelType">Tipo de Modelo:</label>
@@ -2276,6 +2407,236 @@
             }
         }
 
+        // ============================================
+        // FUNCIONALIDAD DE SINCRONIZACIÓN CON CLAUDE.AI
+        // ============================================
+
+        // ID de la extensión (debe coincidir con manifest.json)
+        const EXTENSION_ID = 'claude-sync@aitracker';
+
+        /**
+         * Estado de la sincronización
+         */
+        let isSyncing = false;
+
+        /**
+         * Verifica si la extensión está instalada
+         * @returns {Promise<boolean>}
+         */
+        async function isExtensionInstalled() {
+            try {
+                // Verificar si el puente de la extensión está disponible
+                if (typeof window.claudeSyncExtension !== 'undefined' && window.claudeSyncExtension.installed) {
+                    console.log('[Tracker] Extensión detectada vía puente (bridge)');
+                    return true;
+                }
+
+                console.warn('[Tracker] Puente de extensión no encontrado');
+                return false;
+            } catch (error) {
+                console.error('[Tracker] Error al verificar extensión:', error);
+                return false;
+            }
+        }
+
+        /**
+         * Actualiza el estado visual del botón de sincronización
+         * @param {string} state - 'idle' | 'syncing' | 'success' | 'error'
+         * @param {string} message - Mensaje de estado opcional
+         */
+        function updateSyncButtonState(state, message = '') {
+            const btn = document.getElementById('syncFromClaudeBtn');
+            const statusEl = document.getElementById('syncStatus');
+            const iconEl = btn.querySelector('.sync-icon');
+            const textEl = btn.querySelector('.sync-text');
+
+            // Limpiar clases previas
+            btn.classList.remove('syncing', 'success', 'error');
+            statusEl.classList.remove('success', 'error');
+
+            switch (state) {
+                case 'idle':
+                    btn.disabled = false;
+                    iconEl.textContent = '🔄';
+                    textEl.textContent = 'Sincronizar desde Claude.ai';
+                    statusEl.textContent = '';
+                    break;
+
+                case 'syncing':
+                    btn.disabled = true;
+                    btn.classList.add('syncing');
+                    iconEl.textContent = '⏳';
+                    textEl.textContent = 'Sincronizando...';
+                    statusEl.textContent = message || 'Conectando con Claude.ai...';
+                    break;
+
+                case 'success':
+                    btn.disabled = false;
+                    btn.classList.add('success');
+                    iconEl.textContent = '✓';
+                    textEl.textContent = 'Sincronizado';
+                    statusEl.classList.add('success');
+                    statusEl.textContent = message || 'Sincronización exitosa';
+
+                    // Volver al estado idle después de 3 segundos
+                    setTimeout(() => {
+                        updateSyncButtonState('idle');
+                    }, 3000);
+                    break;
+
+                case 'error':
+                    btn.disabled = false;
+                    btn.classList.add('error');
+                    iconEl.textContent = '✗';
+                    textEl.textContent = 'Error al sincronizar';
+                    statusEl.classList.add('error');
+                    statusEl.textContent = message || 'No se pudo sincronizar';
+
+                    // Volver al estado idle después de 5 segundos
+                    setTimeout(() => {
+                        updateSyncButtonState('idle');
+                    }, 5000);
+                    break;
+            }
+        }
+
+        /**
+         * Envía un mensaje a la extensión para extraer el porcentaje de uso
+         * @returns {Promise<Object>}
+         */
+        async function requestUsageFromExtension() {
+            try {
+                // Usar el puente de la extensión
+                if (typeof window.claudeSyncExtension === 'undefined') {
+                    throw new Error('Puente de extensión no disponible');
+                }
+
+                console.log('[Tracker] Llamando a claudeSyncExtension.syncUsage()...');
+                const response = await window.claudeSyncExtension.syncUsage();
+                console.log('[Tracker] Respuesta recibida:', response);
+
+                return response;
+            } catch (error) {
+                console.error('[Tracker] Error al solicitar sincronización:', error);
+                throw error;
+            }
+        }
+
+        /**
+         * Función principal de sincronización
+         */
+        async function syncFromClaude() {
+            console.log('[Tracker] Iniciando sincronización con Claude.ai...');
+
+            // Evitar sincronizaciones múltiples simultáneas
+            if (isSyncing) {
+                console.warn('[Tracker] Sincronización ya en progreso');
+                return;
+            }
+
+            isSyncing = true;
+            updateSyncButtonState('syncing');
+
+            try {
+                // 1. Verificar si la extensión está instalada
+                const extensionInstalled = await isExtensionInstalled();
+
+                if (!extensionInstalled) {
+                    throw new Error('EXTENSION_NOT_INSTALLED');
+                }
+
+                // 2. Solicitar el porcentaje a la extensión
+                updateSyncButtonState('syncing', 'Extrayendo datos de Claude.ai...');
+
+                const response = await requestUsageFromExtension();
+
+                console.log('[Tracker] Respuesta de la extensión:', response);
+
+                // 3. Procesar la respuesta
+                if (!response.success) {
+                    if (response.error === 'NOT_AUTHENTICATED') {
+                        throw new Error('Por favor, inicia sesión en Claude.ai primero');
+                    } else if (response.error === 'TIMEOUT') {
+                        throw new Error('Timeout: La página de Claude.ai tardó demasiado en cargar');
+                    } else {
+                        throw new Error(response.message || 'Error desconocido');
+                    }
+                }
+
+                // 4. Validar el porcentaje recibido
+                const percentage = response.percentage;
+
+                if (typeof percentage !== 'number' || isNaN(percentage) || percentage < 0 || percentage > 100) {
+                    throw new Error('Porcentaje inválido recibido: ' + percentage);
+                }
+
+                // 5. Determinar el valor a mostrar según el modo de entrada actual
+                let displayValue = percentage;
+
+                if (inputMode === 'remaining') {
+                    // Si el modo es "restante", convertir de "consumido" a "restante"
+                    displayValue = 100 - percentage;
+                    console.log('[Tracker] Convertido a modo restante:', displayValue);
+                }
+
+                // 6. Rellenar el campo de entrada
+                const inputField = document.getElementById('currentUsage');
+                inputField.value = displayValue.toFixed(2);
+
+                // 7. Resaltar visualmente el campo (opcional)
+                inputField.style.background = 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)';
+                setTimeout(() => {
+                    inputField.style.background = '';
+                }, 2000);
+
+                // 8. Enfocar el campo para que el usuario pueda revisarlo
+                inputField.focus();
+
+                // 9. Actualizar estado del botón
+                const modeText = inputMode === 'consumed' ? 'consumido' : 'restante';
+                updateSyncButtonState('success', `${displayValue.toFixed(2)}% ${modeText}`);
+
+                // 10. Mostrar alerta de éxito
+                showAlert(`✓ Sincronizado: ${displayValue.toFixed(2)}% ${modeText}`, 'success');
+
+                console.log('[Tracker] ✓ Sincronización completada exitosamente');
+
+                // Auto-registrar el prompt después de sincronizar
+                console.log('[Tracker] Auto-registrando prompt en 1 segundo...');
+                setTimeout(() => {
+                    console.log('[Tracker] Disparando submit del formulario...');
+                    const form = document.getElementById('promptForm');
+                    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                }, 1000);
+
+            } catch (error) {
+                console.error('[Tracker] Error en sincronización:', error);
+
+                let errorMessage = error.message;
+
+                // Mensajes de error personalizados
+                if (error.message === 'EXTENSION_NOT_INSTALLED') {
+                    errorMessage = 'Extensión no instalada. Por favor, instala la extensión "Claude Sync" primero.';
+                }
+
+                updateSyncButtonState('error', errorMessage);
+                showAlert('❌ Error: ' + errorMessage, 'danger');
+
+            } finally {
+                isSyncing = false;
+            }
+        }
+
+        // Inicializar el botón de sincronización al cargar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            updateSyncButtonState('idle');
+            console.log('[Tracker] Botón de sincronización inicializado');
+        });
+
+        // ============================================
+        // FIN DE FUNCIONALIDAD DE SINCRONIZACIÓN
+        // ============================================
+
         document.getElementById('promptForm').addEventListener('submit', function(e) {
             e.preventDefault();
             console.log('📝 Formulario enviado - Iniciando registro de prompt');
@@ -2818,6 +3179,7 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
         function initializeCustomTimeListeners() {
             const applyBtn = document.getElementById('applyCustomTime');
             const resetBtn = document.getElementById('resetCustomTime');
+            const copyBtn = document.getElementById('copyCurrentTime');
             const hoursInput = document.getElementById('customHours');
             const minutesInput = document.getElementById('customMinutes');
 
@@ -2829,6 +3191,11 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
             if (resetBtn) {
                 resetBtn.removeEventListener('click', resetCustomTime);
                 resetBtn.addEventListener('click', resetCustomTime);
+            }
+
+            if (copyBtn) {
+                copyBtn.removeEventListener('click', copyCurrentTimeToInputs);
+                copyBtn.addEventListener('click', copyCurrentTimeToInputs);
             }
 
             // Actualizar la UI si hay tiempo personalizado guardado
@@ -2923,6 +3290,119 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
                 if (hoursInput) hoursInput.value = '';
                 if (minutesInput) minutesInput.value = '';
                 if (resetBtn) resetBtn.style.display = 'none';
+            }
+        }
+
+        /**
+         * Extrae el tiempo restante desde Claude.ai y lo aplica automáticamente
+         * Llamada cuando el usuario presiona el botón de copiar
+         */
+        async function copyCurrentTimeToInputs() {
+            console.log('[Copy Time] Iniciando extracción de tiempo desde Claude.ai...');
+
+            const hoursInput = document.getElementById('customHours');
+            const minutesInput = document.getElementById('customMinutes');
+            const copyBtn = document.getElementById('copyCurrentTime');
+
+            if (!hoursInput || !minutesInput || !copyBtn) {
+                console.error('[Copy Time] Inputs o botón no encontrados');
+                return;
+            }
+
+            // Evitar clicks múltiples
+            if (copyBtn.disabled) {
+                console.warn('[Copy Time] Ya hay una extracción en progreso');
+                return;
+            }
+
+            // Deshabilitar botón y cambiar visual
+            copyBtn.disabled = true;
+            copyBtn.style.opacity = '0.5';
+
+            try {
+                // 1. Verificar si la extensión está instalada
+                const extensionInstalled = await isExtensionInstalled();
+
+                if (!extensionInstalled) {
+                    showAlert('⚠️ Extensión no instalada. Instala la extensión Claude Sync desde about:debugging', 'error');
+                    return;
+                }
+
+                // 2. Solicitar datos a la extensión (incluye porcentaje y tiempo)
+                console.log('[Copy Time] Llamando a la extensión...');
+                const response = await requestUsageFromExtension();
+
+                console.log('[Copy Time] Respuesta de la extensión:', response);
+
+                // 3. Procesar la respuesta
+                if (!response.success) {
+                    if (response.error === 'NOT_AUTHENTICATED') {
+                        showAlert('⚠️ Inicia sesión en Claude.ai primero', 'error');
+                    } else if (response.error === 'TIMEOUT') {
+                        showAlert('⚠️ Timeout: La página tardó demasiado en cargar', 'error');
+                    } else {
+                        showAlert('⚠️ ' + (response.message || 'Error al extraer datos'), 'error');
+                    }
+                    return;
+                }
+
+                // 4. Validar que se recibió el tiempo de reseteo
+                if (!response.resetTime) {
+                    showAlert('⚠️ No se encontró el tiempo de reseteo en Claude.ai', 'error');
+                    console.warn('[Copy Time] La respuesta no incluye resetTime:', response);
+                    return;
+                }
+
+                const { hours, minutes } = response.resetTime;
+
+                // 5. Validar valores
+                if (typeof hours !== 'number' || typeof minutes !== 'number') {
+                    showAlert('⚠️ Tiempo inválido recibido', 'error');
+                    return;
+                }
+
+                console.log('[Copy Time] Tiempo extraído:', hours, 'h', minutes, 'min');
+
+                // 6. Poblar inputs
+                hoursInput.value = hours;
+                minutesInput.value = minutes;
+
+                // 7. Animación visual: resaltar inputs brevemente
+                hoursInput.style.background = 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)';
+                minutesInput.style.background = 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)';
+
+                setTimeout(() => {
+                    hoursInput.style.background = '';
+                    minutesInput.style.background = '';
+                }, 800);
+
+                // 8. APLICAR AUTOMÁTICAMENTE el tiempo (sin que el usuario presione "Aplicar")
+                const now = new Date();
+                const totalMinutes = hours * 60 + minutes;
+                const endTime = new Date(now.getTime() + totalMinutes * 60 * 1000);
+
+                customEndTime = endTime.getTime();
+                setStorageItem('customEndTime', customEndTime.toString());
+
+                // Mostrar botón de resetear
+                const resetBtn = document.getElementById('resetCustomTime');
+                if (resetBtn) resetBtn.style.display = 'inline-block';
+
+                // 9. Actualizar todas las estadísticas para reflejar el tiempo personalizado
+                updateTodayStats();
+
+                // 10. Feedback al usuario
+                showAlert(`✓ Tiempo extraído y aplicado: ${hours}h ${minutes}m`, 'success');
+
+                console.log(`[Copy Time] Tiempo aplicado automáticamente: ${hours}h ${minutes}m (fin: ${new Date(customEndTime).toLocaleTimeString()})`);
+
+            } catch (error) {
+                console.error('[Copy Time] Error general:', error);
+                showAlert('⚠️ Error: ' + error.message, 'error');
+            } finally {
+                // Re-habilitar botón
+                copyBtn.disabled = false;
+                copyBtn.style.opacity = '';
             }
         }
 

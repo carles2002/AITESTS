@@ -125,6 +125,216 @@ AITESTS/
 - Errores HTTP
 - Respuesta vacía de Ollama
 
+### v3.0 - Sincronización Automática con Claude.ai (Enero 2026)
+
+**Funcionalidad añadida:**
+- Botón "Sincronizar desde Claude.ai" en formulario de registro
+- Extrae automáticamente el porcentaje de uso actual desde `claude.ai/settings/usage`
+- Auto-rellena el campo de entrada con el valor sincronizado
+- Respeta modo "consumido" vs "restante" con conversión automática
+
+**Tecnología:**
+- Extensión de Firefox WebExtension (compatible con Zen Browser)
+- 3 archivos principales: manifest.json, content-script.js, background.js
+- Comunicación vía browser.runtime API
+
+**Decisiones de diseño:**
+
+1. **Sincronización manual**: Solo cuando el usuario presiona el botón, no automática. Evita saturar Claude.ai con requests y da control al usuario.
+
+2. **Extracción robusta del DOM**: Múltiples selectores de fallback para adaptarse a cambios en la estructura de Claude.ai. Si un selector falla, intenta con los siguientes automáticamente.
+
+3. **Manejo de autenticación**: Si el usuario no está logueado en Claude.ai, abre automáticamente la página de login y espera que el usuario inicie sesión.
+
+4. **Estados visuales del botón**: El botón muestra 4 estados con iconos animados:
+   - 🔄 Azul (idle): Listo para sincronizar
+   - ⏳ Gris (syncing): Procesando, con icono rotando
+   - ✓ Verde (success): Completado, muestra el valor extraído
+   - ✗ Rojo (error): Error, muestra mensaje específico
+
+5. **Conversión automática según modo**: Si el tracker está en modo "% Restante", convierte automáticamente el valor (100 - valor_consumido).
+
+6. **Apertura temporal de pestaña**: La extensión abre `claude.ai/settings/usage` en una nueva pestaña, extrae el porcentaje, y cierra la pestaña automáticamente. Proceso completo en 3-5 segundos.
+
+**Estructura de archivos (nueva carpeta):**
+```
+AITRACKER/extension/
+├── manifest.json          # Configuración de la extensión
+├── content-script.js      # Extracción del DOM de Claude.ai
+├── background.js          # Gestión de pestañas y comunicación
+└── README_EXTENSION.md    # Documentación de instalación y uso
+```
+
+**Código añadido en ai-usage-tracker.html:**
+
+- **HTML** (línea ~959): Botón y contenedor de estado
+  ```html
+  <div class="sync-button-container">
+      <button id="syncFromClaudeBtn" class="btn-sync" onclick="syncFromClaude()">
+          <span class="sync-icon">🔄</span>
+          <span class="sync-text">Sincronizar desde Claude.ai</span>
+      </button>
+      <span id="syncStatus" class="sync-status"></span>
+  </div>
+  ```
+
+- **CSS** (líneas ~298-375): Estilos para `.btn-sync`, `.sync-status`, estados (syncing, success, error), y animación de rotación del icono
+
+- **JS Variables** (línea ~2381): `let isSyncing = false;`
+
+- **JS Funciones** (líneas ~2371-2604):
+  - `isExtensionInstalled()`: Verifica si la extensión está cargada
+  - `updateSyncButtonState(state, message)`: Actualiza UI del botón según estado
+  - `requestUsageFromExtension()`: Envía mensaje a la extensión para solicitar sincronización
+  - `syncFromClaude()`: Función principal (230 líneas) que orquesta todo el proceso
+
+**Flujo de sincronización:**
+1. Usuario presiona botón "Sincronizar"
+2. Tracker verifica que extensión está instalada
+3. Envía mensaje a la extensión: `{action: 'syncUsage'}`
+4. Extensión abre `claude.ai/settings/usage` en nueva pestaña
+5. Espera carga completa (incluye delay de 2s para renderizado React)
+6. Content script extrae porcentaje del DOM con regex flexible
+7. Cierra pestaña automáticamente
+8. Devuelve resultado al tracker
+9. Tracker valida y rellena el campo `#currentUsage`
+10. Resalta campo con fondo verde temporal (2s)
+11. Muestra alerta de éxito
+
+**Manejo de errores:**
+- **Extensión no instalada**: Alerta inmediata con instrucciones de instalación
+- **Usuario no autenticado**: Abre `claude.ai/login` automáticamente, muestra mensaje
+- **Timeout (>10s)**: Cierra pestaña, muestra error, sugiere verificar conexión
+- **Selectores no funcionan**: Error "No se encontró porcentaje", sugiere reportar el problema
+- **Porcentaje inválido**: Validación adicional, rechaza valores fuera de rango 0-100
+
+**Uso:**
+1. Instalar extensión desde `extension/manifest.json` usando `about:debugging` en Firefox/Zen Browser
+2. Verificar que aparece "AI Usage Tracker - Claude Sync" en lista de extensiones
+3. Abrir ai-usage-tracker.html
+4. Presionar "🔄 Sincronizar desde Claude.ai"
+5. Esperar 5-10 segundos mientras extrae el %
+6. Revisar valor auto-rellenado en el campo
+7. Presionar "Registrar Prompt" para guardar
+
+**Selectores del DOM utilizados (con fallbacks):**
+```javascript
+const SELECTORS = {
+  usagePercentage: [
+    '[data-testid="usage-percentage"]',
+    '.usage-percentage',
+    '[aria-label*="usage"]',
+    '[aria-label*="usado"]',
+    '*' // Búsqueda exhaustiva como último recurso
+  ],
+  authIndicator: [
+    '[data-testid="user-menu"]',
+    '.user-profile',
+    'button[aria-label*="Account"]'
+  ]
+};
+```
+
+**Regex de extracción:**
+- Patrón: `/(\d+[.,]\d+|\d+)\s*%/`
+- Soporta: "15.5%", "15,5%", "15%", "15.5 %"
+- Normaliza comas a puntos antes de parsear
+
+**Configuración importante:**
+- Extension ID en manifest.json: `"id": "claude-sync@aitracker"`
+- Extension ID en tracker HTML: `const EXTENSION_ID = 'claude-sync@aitracker';`
+- Ambos deben coincidir exactamente
+
+**Nota sobre compatibilidad:**
+- Diseñado para Firefox y Zen Browser (manifest_version: 2)
+- Zen Browser es un fork de Firefox, por lo que es totalmente compatible
+- Para Chrome/Edge se requeriría adaptar a manifest_version: 3
+
+**Limitaciones conocidas:**
+- Requiere que el usuario esté autenticado en Claude.ai
+- Dependiente de la estructura HTML de Claude.ai (puede romperse con actualizaciones)
+- Timeout de 10 segundos para páginas lentas
+- No funciona en modo offline
+
+**Mejoras futuras planeadas:**
+- v3.2: Auto-detección de modelo usado (Sonnet/Haiku/Opus)
+- v3.3: Sincronización periódica automática cada X minutos
+- v3.4: Popup de extensión con estadísticas rápidas
+- v3.5: Soporte para Chrome/Edge (manifest v3)
+
+### v3.1 - Sincronización Automática del Tiempo Restante (Enero 2026)
+
+**Funcionalidad añadida:**
+- Botón "📋" en la tarjeta "Tiempo Restante" que extrae automáticamente el tiempo de reseteo desde Claude.ai
+- Extrae el texto "Se restablece en X h Y min" directamente desde `claude.ai/settings/usage`
+- Auto-rellena y auto-aplica el tiempo personalizado sin necesidad de confirmación
+- Usa la misma extensión de Firefox que el botón de sincronización de porcentaje
+
+**Tecnología:**
+- Extensión actualizada para extraer ambos datos: porcentaje y tiempo de reseteo
+- Modificaciones en: content-script.js, background.js, ai-usage-tracker.html
+- Reutiliza la infraestructura existente de la v3.0
+
+**Decisiones de diseño:**
+
+1. **Reutilización de extensión**: El botón usa la misma extensión que el de porcentaje, en una sola llamada obtiene ambos datos (porcentaje y tiempo).
+
+2. **Extracción del DOM con regex**: Busca el texto "Se restablece en X h Y min" en toda la página usando regex flexible: `/Se restablece en\s+(?:(\d+)\s*h\s*)?(?:(\d+)\s*min)?/i`
+
+3. **Auto-aplicación inmediata**: Como el botón de porcentaje, aplica automáticamente el tiempo sin que el usuario tenga que presionar "Aplicar".
+
+4. **Feedback visual**: Los inputs se resaltan con gradiente azul durante 800ms para confirmar la acción.
+
+5. **Manejo de errores robusto**: Valida que la extensión esté instalada, que el usuario esté autenticado, y que se haya encontrado el tiempo.
+
+**Código modificado:**
+
+- **content-script.js** (líneas ~109-138):
+  - Nueva función: `extractResetTime()` que busca "Se restablece en X h Y min" en el DOM
+  - Modificación en handlers de mensajes (líneas ~216-251 y ~260-293) para devolver `resetTime` junto con `percentage`
+
+- **background.js** (líneas ~120-135):
+  - Modificación para incluir `resetTime` en la respuesta al tracker si está disponible
+
+- **ai-usage-tracker.html** (líneas ~3296-3407):
+  - Reescritura completa de `copyCurrentTimeToInputs()` para usar la extensión
+  - Ahora es una función `async` que:
+    1. Verifica extensión instalada
+    2. Llama a `requestUsageFromExtension()`
+    3. Extrae `response.resetTime`
+    4. Valida los valores
+    5. Auto-rellena inputs
+    6. Auto-aplica el tiempo
+    7. Actualiza estadísticas
+
+**Flujo de uso:**
+1. Usuario presiona el botón "📋" en la tarjeta "Tiempo Restante"
+2. Extensión abre `claude.ai/settings/usage` en nueva pestaña
+3. Extrae tanto el porcentaje como "Se restablece en X h Y min"
+4. Cierra la pestaña automáticamente
+5. Rellena los inputs de horas/minutos
+6. Aplica automáticamente el tiempo personalizado
+7. Muestra alerta de éxito
+8. **Tiempo total del proceso: ~5-8 segundos**
+
+**Manejo de errores:**
+- **Extensión no instalada**: Alerta con mensaje de instalación
+- **Usuario no autenticado**: Abre `claude.ai/login` automáticamente
+- **Tiempo no encontrado**: Mensaje "No se encontró el tiempo de reseteo"
+- **Timeout**: Mensaje de error si tarda más de 10 segundos
+
+**Uso:**
+1. Extensión ya instalada desde v3.0
+2. Presionar botón "📋" en tarjeta "Tiempo Restante"
+3. Esperar 5-8 segundos
+4. El tiempo se aplica automáticamente
+5. Continuar trabajando con el tiempo personalizado aplicado
+
+**Limitaciones:**
+- Requiere que Claude.ai muestre el texto "Se restablece en X h Y min" en español
+- Si Claude.ai cambia el formato del texto, la regex puede fallar
+- Solo funciona con sesión activa en Claude.ai
+
 ## Arquitectura de Datos
 
 ### localStorage Keys
@@ -204,4 +414,4 @@ Para probar la integración con Ollama:
 
 ---
 
-*Última actualización: Diciembre 2025*
+*Última actualización: Enero 2026*

@@ -15,7 +15,8 @@
       "Bash(timeout:*)",
       "Bash(ping:*)",
       "Bash(findstr:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(cmd /c \"echo Test: Verificando sintaxis del bat\")"
     ]
   }
 }

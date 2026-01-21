@@ -1,0 +1,42 @@
+{
+  "manifest_version": 2,
+  "name": "AI Usage Tracker - Claude Sync",
+  "version": "1.0.0",
+  "description": "Sincroniza automáticamente el porcentaje de uso de Claude.ai con AI Usage Tracker",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "claude-sync@aitracker"
+    }
+  },
+
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "*://claude.ai/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["*://claude.ai/settings/usage*"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["http://localhost/*", "http://127.0.0.1/*", "file:///*"],
+      "js": ["tracker-bridge.js"],
+      "run_at": "document_start"
+    }
+  ],
+
+  "web_accessible_resources": [
+    "content-script.js"
+  ]
+}
