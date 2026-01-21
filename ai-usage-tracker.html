@@ -1317,6 +1317,10 @@
                     // Calcular tiempo restante desde ahora hasta customEndTime
                     timeRemainingMs = customEndTime - now.getTime();
 
+                    // Actualizar también la hora de fin de sesión basándose en el tiempo personalizado
+                    const customEndTimeDate = new Date(customEndTime);
+                    sessionEndTime = customEndTimeDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + ' ⚙️';
+
                     if (timeRemainingMs > 0) {
                         totalHoursRemaining = timeRemainingMs / (60 * 60 * 1000);
                         const hoursRemaining = Math.floor(timeRemainingMs / (60 * 60 * 1000));
