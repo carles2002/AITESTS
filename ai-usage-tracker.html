@@ -1492,11 +1492,8 @@
                         // Basado en cuántas prompts has hecho por hora hasta ahora
                         if (sessionElapsedHours > 0) {
                             const currentRatePerHour = totalPromptsCurrentSession / sessionElapsedHours;
-
-                            // El adaptado es el ritmo actual, pero limitado a no exceder las prompts restantes
-                            // Si al ritmo actual te pasas del 95%, ajustamos al ritmo sostenible
-                            const maxSustainableRate = totalHoursRemaining > 0 ? remainingPrompts / totalHoursRemaining : 0;
-                            promptsPerHourAdapted = Math.min(currentRatePerHour, maxSustainableRate);
+                            // Reflejamos el ritmo real sin limitarlo por sostenibilidad
+                            promptsPerHourAdapted = currentRatePerHour;
 
                             // 7. Calcular prompts proyectadas
                             // Necesarias: las que quedan para llegar al 95%
