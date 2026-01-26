@@ -94,6 +94,74 @@
             margin-top: 5px;
         }
 
+        .prompts-gauge {
+            margin-top: 12px;
+            width: 200px;
+            max-width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .prompts-gauge-svg {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .prompts-gauge-base,
+        .prompts-gauge-arc {
+            fill: none;
+            stroke-width: 16;
+            stroke-linecap: round;
+        }
+
+        .prompts-gauge-base {
+            stroke: #dde1f9;
+        }
+
+        .prompts-gauge-arc {
+            stroke: url(#promptsGaugeGradient);
+        }
+
+        .prompts-gauge-pointer {
+            stroke: #6f63d9;
+            stroke-width: 6;
+            stroke-linecap: round;
+            opacity: 0;
+            transition: stroke 0.3s ease, opacity 0.3s ease;
+        }
+
+        .prompts-gauge-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.95em;
+            color: #666;
+            margin-top: 6px;
+        }
+
+        .prompts-gauge-labels span {
+            font-weight: 700;
+        }
+
+        .prompts-gauge-labels span:first-child {
+            color: #e74c3c;
+        }
+
+        .prompts-gauge-labels span:nth-child(2) {
+            color: #333333;
+        }
+
+        .prompts-gauge-labels span:last-child {
+            color: #27ae60;
+        }
+
+        .prompts-gauge-mid-marker {
+            stroke: #333333;
+            stroke-width: 4;
+            stroke-linecap: round;
+            opacity: 0.65;
+        }
+
         /* Estilos para editor de tiempo personalizado */
         .time-editor {
             margin: 10px 0 5px 0;
@@ -1046,6 +1114,27 @@
                 <div class="stat-label">uniforme / ritmo actual</div>
                 <div class="stat-value" id="promptsPerHourRatioValue">—</div>
                 <div class="stat-label">relación uniforme/ritmo</div>
+                <div class="prompts-gauge">
+                    <svg class="prompts-gauge-svg" viewBox="0 0 200 120" role="presentation">
+                        <defs>
+                            <linearGradient id="promptsGaugeGradient" x1="0%" y1="100%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#e74c3c" />
+                                <stop offset="50%" stop-color="#333333" />
+                                <stop offset="65%" stop-color="#333333" />
+                                <stop offset="100%" stop-color="#27ae60" />
+                            </linearGradient>
+                        </defs>
+                        <path class="prompts-gauge-base" d="M20 100 A80 80 0 0 1 180 100" />
+                        <path class="prompts-gauge-arc" d="M20 100 A80 80 0 0 1 180 100" />
+                        <line class="prompts-gauge-mid-marker" x1="100" y1="100" x2="100" y2="40" />
+                        <line id="promptsPerHourGauge" class="prompts-gauge-pointer" x1="100" y1="100" x2="100" y2="28" />
+                    </svg>
+                    <div class="prompts-gauge-labels">
+                        <span>0</span>
+                        <span>1</span>
+                        <span>2</span>
+                    </div>
+                </div>
             </div>
 
             <div class="stat-card">
@@ -1533,6 +1622,8 @@
             if (ratioElement) {
                 let ratioDisplay = '—';
                 let ratioColor = '#999';
+                let pointerRotation = -90;
+                let pointerVisible = false;
 
                 if (promptsPerHourRatio !== null) {
                     ratioDisplay = `${promptsPerHourRatio.toFixed(2)}x`;
@@ -1544,10 +1635,22 @@
                     } else {
                         ratioColor = '#e74c3c';
                     }
+
+                    const clampedRatio = Math.min(Math.max(promptsPerHourRatio, 0), 2);
+                    pointerRotation = (clampedRatio / 2) * 180 - 90;
+                    pointerVisible = true;
                 }
 
                 ratioElement.textContent = ratioDisplay;
                 ratioElement.style.color = ratioColor;
+
+                const gaugePointer = document.getElementById('promptsPerHourGauge');
+                if (gaugePointer) {
+                    gaugePointer.style.opacity = pointerVisible ? '1' : '0';
+                    gaugePointer.setAttribute('stroke', pointerVisible ? ratioColor : '#6f63d9');
+                    const rotationValue = pointerRotation.toFixed(2);
+                    gaugePointer.setAttribute('transform', `rotate(${rotationValue} 100 100)`);
+                }
             }
 
             document.getElementById('sessionIndicator').textContent = `Sesión ${currentSessionNumber} de 2`;
