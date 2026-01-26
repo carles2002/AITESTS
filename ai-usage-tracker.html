@@ -1044,6 +1044,8 @@
                 <h3>Prompts por Hora</h3>
                 <div class="stat-value" id="promptsCurrentHour">0 / 0</div>
                 <div class="stat-label">uniforme / ritmo actual</div>
+                <div class="stat-value" id="promptsPerHourRatioValue">—</div>
+                <div class="stat-label">relación uniforme/ritmo</div>
             </div>
 
             <div class="stat-card">
@@ -1426,6 +1428,7 @@
             let promptsPerHourAdapted = 0;
             let promptsProjectedNecessary = 0;
             let promptsProjectedAtCurrentRate = 0;
+            let promptsPerHourRatio = null;
 
             if (totalPromptsCurrentSession > 0) {
                 // 1. Calcular hora de inicio de sesión (primer prompt - 10 minutos)
@@ -1507,6 +1510,12 @@
                 }
             }
 
+            if (promptsPerHourAdapted > 0 && promptsPerHourUniform > 0) {
+                promptsPerHourRatio = promptsPerHourUniform / promptsPerHourAdapted;
+            } else if (promptsPerHourAdapted > 0 && promptsPerHourUniform === 0) {
+                promptsPerHourRatio = 0;
+            }
+
             document.getElementById('totalUsage').textContent = totalUsageCurrentSession.toFixed(2) + '%';
             document.getElementById('remainingUsage').textContent = (100 - totalUsageCurrentSession).toFixed(2) + '%';
             document.getElementById('totalCost').textContent = totalCost.toFixed(2) + '€';
@@ -1522,6 +1531,27 @@
             document.getElementById('timeRemaining').textContent = timeRemaining;
             document.getElementById('promptsCurrentHour').textContent = `${promptsPerHourUniform.toFixed(2)} / ${promptsPerHourAdapted.toFixed(2)}`;
             document.getElementById('promptsProjected').textContent = `${promptsProjectedNecessary.toFixed(2)} / ${promptsProjectedAtCurrentRate.toFixed(2)}`;
+
+            const ratioElement = document.getElementById('promptsPerHourRatioValue');
+            if (ratioElement) {
+                let ratioDisplay = '—';
+                let ratioColor = '#999';
+
+                if (promptsPerHourRatio !== null) {
+                    ratioDisplay = `${promptsPerHourRatio.toFixed(2)}x`;
+
+                    if (promptsPerHourRatio > 1.6) {
+                        ratioColor = '#27ae60';
+                    } else if (promptsPerHourRatio >= 1.0) {
+                        ratioColor = '#333';
+                    } else {
+                        ratioColor = '#e74c3c';
+                    }
+                }
+
+                ratioElement.textContent = ratioDisplay;
+                ratioElement.style.color = ratioColor;
+            }
 
             document.getElementById('sessionIndicator').textContent = `Sesión ${currentSessionNumber} de 2`;
 
