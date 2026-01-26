@@ -128,7 +128,10 @@
             stroke-width: 6;
             stroke-linecap: round;
             opacity: 0;
-            transition: stroke 0.3s ease, opacity 0.3s ease;
+            transform-origin: 100px 100px;
+            transform-box: fill-box;
+            transform: rotate(-90deg);
+            transition: transform 0.6s ease, stroke 0.3s ease, opacity 0.3s ease;
         }
 
         .prompts-gauge-labels {
@@ -160,6 +163,25 @@
             stroke-width: 4;
             stroke-linecap: round;
             opacity: 0.65;
+        }
+
+        .value-change-animate {
+            animation: valueChangePulse 0.6s ease;
+        }
+
+        @keyframes valueChangePulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            30% {
+                transform: scale(1.08);
+                opacity: 0.9;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
 
         /* Estilos para editor de tiempo personalizado */
@@ -1479,6 +1501,26 @@
             }, 3000);
         }
 
+        function triggerValueAnimation(element) {
+            if (!element) return;
+            element.classList.remove('value-change-animate');
+
+            // Force reflow so the animation can retrigger consistently
+            void element.offsetWidth;
+
+            element.classList.add('value-change-animate');
+        }
+
+        function setTextContentWithAnimation(elementId, newText) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+
+            if (element.textContent === newText) return;
+
+            element.textContent = newText;
+            triggerValueAnimation(element);
+        }
+
         function updateDashboard() {
             let allPromptsToday = [...currentSessionPrompts];
             completedSessions.forEach(session => {
@@ -1602,21 +1644,21 @@
                 promptsPerHourRatio = 0;
             }
 
-            document.getElementById('totalUsage').textContent = totalUsageCurrentSession.toFixed(2) + '%';
-            document.getElementById('remainingUsage').textContent = (100 - totalUsageCurrentSession).toFixed(2) + '%';
-            document.getElementById('totalCost').textContent = totalCost.toFixed(2) + '€';
-            document.getElementById('avgCostPerPrompt').textContent = avgCostPerPrompt.toFixed(3) + '€';
-            document.getElementById('totalPrompts').textContent = totalPromptsToday;
-            document.getElementById('avgPerPrompt').textContent = avgPerPrompt.toFixed(2) + '%';
-            document.getElementById('promptsPerHour').textContent = promptsPerHour;
-            document.getElementById('minutesPerPrompt').textContent = minutesPerPrompt;
+            setTextContentWithAnimation('totalUsage', `${totalUsageCurrentSession.toFixed(2)}%`);
+            setTextContentWithAnimation('remainingUsage', `${(100 - totalUsageCurrentSession).toFixed(2)}%`);
+            setTextContentWithAnimation('totalCost', `${totalCost.toFixed(2)}€`);
+            setTextContentWithAnimation('avgCostPerPrompt', `${avgCostPerPrompt.toFixed(3)}€`);
+            setTextContentWithAnimation('totalPrompts', `${totalPromptsToday}`);
+            setTextContentWithAnimation('avgPerPrompt', `${avgPerPrompt.toFixed(2)}%`);
+            setTextContentWithAnimation('promptsPerHour', `${promptsPerHour}`);
+            setTextContentWithAnimation('minutesPerPrompt', `${minutesPerPrompt}`);
 
             // Actualizar nuevos campos
-            document.getElementById('remainingPrompts').textContent = remainingPrompts.toFixed(2);
-            document.getElementById('sessionEndTime').textContent = sessionEndTime;
-            document.getElementById('timeRemaining').textContent = timeRemaining;
-            document.getElementById('promptsCurrentHour').textContent = `${promptsPerHourUniform.toFixed(2)} / ${promptsPerHourAdapted.toFixed(2)}`;
-            document.getElementById('promptsProjected').textContent = `${promptsProjectedNecessary.toFixed(2)} / ${promptsProjectedAtCurrentRate.toFixed(2)}`;
+            setTextContentWithAnimation('remainingPrompts', `${remainingPrompts.toFixed(2)}`);
+            setTextContentWithAnimation('sessionEndTime', `${sessionEndTime}`);
+            setTextContentWithAnimation('timeRemaining', `${timeRemaining}`);
+            setTextContentWithAnimation('promptsCurrentHour', `${promptsPerHourUniform.toFixed(2)} / ${promptsPerHourAdapted.toFixed(2)}`);
+            setTextContentWithAnimation('promptsProjected', `${promptsProjectedNecessary.toFixed(2)} / ${promptsProjectedAtCurrentRate.toFixed(2)}`);
 
             const ratioElement = document.getElementById('promptsPerHourRatioValue');
             if (ratioElement) {
@@ -1641,15 +1683,22 @@
                     pointerVisible = true;
                 }
 
-                ratioElement.textContent = ratioDisplay;
+                if (ratioElement.textContent !== ratioDisplay) {
+                    ratioElement.textContent = ratioDisplay;
+                    triggerValueAnimation(ratioElement);
+                } else if (ratioElement.dataset.currentColor !== ratioColor) {
+                    triggerValueAnimation(ratioElement);
+                }
+
                 ratioElement.style.color = ratioColor;
+                ratioElement.dataset.currentColor = ratioColor;
 
                 const gaugePointer = document.getElementById('promptsPerHourGauge');
                 if (gaugePointer) {
                     gaugePointer.style.opacity = pointerVisible ? '1' : '0';
-                    gaugePointer.setAttribute('stroke', pointerVisible ? ratioColor : '#6f63d9');
+                    gaugePointer.style.stroke = pointerVisible ? ratioColor : '#6f63d9';
                     const rotationValue = pointerRotation.toFixed(2);
-                    gaugePointer.setAttribute('transform', `rotate(${rotationValue} 100 100)`);
+                    gaugePointer.style.transform = `rotate(${rotationValue}deg)`;
                 }
             }
 
