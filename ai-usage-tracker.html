@@ -128,10 +128,12 @@
             stroke-width: 6;
             stroke-linecap: round;
             opacity: 0;
-            transform-origin: 100px 100px;
-            transform-box: fill-box;
-            transform: rotate(-90deg);
-            transition: transform 0.6s ease, stroke 0.3s ease, opacity 0.3s ease;
+            transition: stroke 0.3s ease, opacity 0.3s ease;
+        }
+
+        .prompts-gauge-needle {
+            transform: translate(100px, 100px) rotate(-90deg);
+            transition: transform 0.6s ease;
         }
 
         .prompts-gauge-labels {
@@ -182,6 +184,43 @@
                 transform: scale(1);
                 opacity: 1;
             }
+        }
+
+        /* Rebote en extremos del velocímetro */
+        .prompts-gauge-needle-inner {
+            transform-origin: 0px 0px;
+        }
+
+        .prompts-gauge-bounce-left {
+            animation: needleBounceLeft 0.9s ease-in-out infinite;
+        }
+
+        .prompts-gauge-bounce-right {
+            animation: needleBounceRight 0.9s ease-in-out infinite;
+        }
+
+        @keyframes needleBounceLeft {
+            0% { transform: rotate(-2deg); }
+            50% { transform: rotate(1deg); }
+            100% { transform: rotate(-2deg); }
+        }
+
+        @keyframes needleBounceRight {
+            0% { transform: rotate(2deg); }
+            50% { transform: rotate(-1deg); }
+            100% { transform: rotate(2deg); }
+        }
+
+        /* Etiquetas de extremos MIN/MAX */
+        .prompts-gauge-ext-label {
+            font-weight: 800;
+            font-size: 1.4em;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            dominant-baseline: central; /* Ensures vertical centering */
+        }
+        .prompts-gauge-ext-label.visible {
+            opacity: 1;
         }
 
         /* Estilos para editor de tiempo personalizado */
@@ -1149,7 +1188,13 @@
                         <path class="prompts-gauge-base" d="M20 100 A80 80 0 0 1 180 100" />
                         <path class="prompts-gauge-arc" d="M20 100 A80 80 0 0 1 180 100" />
                         <line class="prompts-gauge-mid-marker" x1="100" y1="100" x2="100" y2="40" />
-                        <line id="promptsPerHourGauge" class="prompts-gauge-pointer" x1="100" y1="100" x2="100" y2="28" />
+                        <g id="promptsGaugeNeedle" class="prompts-gauge-needle">
+                            <g id="promptsGaugeNeedleInner" class="prompts-gauge-needle-inner">
+                                <line id="promptsPerHourGauge" class="prompts-gauge-pointer" x1="0" y1="0" x2="0" y2="-72" />
+                            </g>
+                        </g>
+                        <text id="promptsGaugeMinLabel" class="prompts-gauge-ext-label" x="32" y="45" text-anchor="middle">🚨</text>
+                        <text id="promptsGaugeMaxLabel" class="prompts-gauge-ext-label" x="168" y="45" text-anchor="middle">✅</text>
                     </svg>
                     <div class="prompts-gauge-labels">
                         <span>0</span>
@@ -1518,7 +1563,81 @@
             if (element.textContent === newText) return;
 
             element.textContent = newText;
-            triggerValueAnimation(element);
+
+            if (isElementVisibleById(elementId)) {
+                triggerValueAnimation(element);
+            } else {
+                element.dataset.pendingAnimation = 'true';
+            }
+        }
+
+        // === VISIBILIDAD: Animar solo cuando el elemento está a la vista ===
+        const elementVisibility = new Map();
+        let visibilityObserver = null;
+
+        function isElementVisibleById(id) {
+            const el = document.getElementById(id);
+            if (!el) return false;
+            if (elementVisibility.has(id)) return elementVisibility.get(id);
+            const rect = el.getBoundingClientRect();
+            return (
+                rect.top < (window.innerHeight || document.documentElement.clientHeight) &&
+                rect.bottom > 0 &&
+                rect.left < (window.innerWidth || document.documentElement.clientWidth) &&
+                rect.right > 0
+            );
+        }
+
+        function observeElementById(id) {
+            const el = document.getElementById(id);
+            if (!el || !visibilityObserver) return;
+            visibilityObserver.observe(el);
+        }
+
+        function setupVisibilityObserver() {
+            visibilityObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    const target = entry.target;
+                    const id = target.id;
+                    elementVisibility.set(id, entry.isIntersecting);
+
+                    // Disparar animación pendiente al entrar en vista
+                    if (entry.isIntersecting && target.dataset && target.dataset.pendingAnimation === 'true') {
+                        delete target.dataset.pendingAnimation;
+                        triggerValueAnimation(target);
+                    }
+
+                    // Manejo del velocímetro: aplicar rotación pendiente y rebote
+                    if (id === 'promptsGaugeNeedle' && entry.isIntersecting) {
+                        const pendingRotation = target.dataset.pendingRotation;
+                        const bounceSide = target.dataset.bounceSide;
+                        if (pendingRotation) {
+                            target.style.transform = `translate(100px, 100px) rotate(${pendingRotation}deg)`;
+                            target.dataset.currentRotation = pendingRotation;
+                            delete target.dataset.pendingRotation;
+                        }
+                        applyNeedleBounce(bounceSide);
+                    }
+                });
+            }, { threshold: 0.2 });
+
+            const idsToObserve = [
+                'totalUsage','remainingUsage','totalCost','avgCostPerPrompt','totalPrompts','avgPerPrompt',
+                'promptsPerHour','minutesPerPrompt','remainingPrompts','sessionEndTime','timeRemaining',
+                'promptsCurrentHour','promptsProjected','promptsPerHourRatioValue','promptsGaugeNeedle'
+            ];
+            idsToObserve.forEach(observeElementById);
+        }
+
+        function applyNeedleBounce(side) {
+            const inner = document.getElementById('promptsGaugeNeedleInner');
+            if (!inner) return;
+            inner.classList.remove('prompts-gauge-bounce-left','prompts-gauge-bounce-right');
+            if (side === 'left') {
+                inner.classList.add('prompts-gauge-bounce-left');
+            } else if (side === 'right') {
+                inner.classList.add('prompts-gauge-bounce-right');
+            }
         }
 
         function updateDashboard() {
@@ -1678,8 +1797,14 @@
                         ratioColor = '#e74c3c';
                     }
 
-                    const clampedRatio = Math.min(Math.max(promptsPerHourRatio, 0), 2);
-                    pointerRotation = (clampedRatio / 2) * 180 - 90;
+                    // Limitar la aguja a un rango seguro (como en los coches)
+                    const RATIO_MIN = 0;
+                    const RATIO_MAX = 2;
+                    const DEG_MARGIN = 4; // margen para no tocar el borde
+                    const clampedRatio = Math.max(RATIO_MIN, Math.min(promptsPerHourRatio, RATIO_MAX));
+                    const rawRotation = (clampedRatio / 2) * 180 - 90; // -90..+90
+                    const MAX_DEG = 90 - DEG_MARGIN; // recortar 4º en ambos extremos
+                    pointerRotation = Math.max(-MAX_DEG, Math.min(rawRotation, MAX_DEG));
                     pointerVisible = true;
                 }
 
@@ -1693,12 +1818,43 @@
                 ratioElement.style.color = ratioColor;
                 ratioElement.dataset.currentColor = ratioColor;
 
-                const gaugePointer = document.getElementById('promptsPerHourGauge');
-                if (gaugePointer) {
-                    gaugePointer.style.opacity = pointerVisible ? '1' : '0';
-                    gaugePointer.style.stroke = pointerVisible ? ratioColor : '#6f63d9';
-                    const rotationValue = pointerRotation.toFixed(2);
-                    gaugePointer.style.transform = `rotate(${rotationValue}deg)`;
+                const needleGroup = document.getElementById('promptsGaugeNeedle');
+                const needleLine = document.getElementById('promptsPerHourGauge');
+                const rotationValue = pointerRotation.toFixed(2);
+                const extremeSide = (promptsPerHourRatio !== null && promptsPerHourRatio <= 0.2) ? 'left'
+                    : (promptsPerHourRatio !== null && promptsPerHourRatio >= 1.9) ? 'right' : null;
+                const minLabel = document.getElementById('promptsGaugeMinLabel');
+                const maxLabel = document.getElementById('promptsGaugeMaxLabel');
+
+                if (needleGroup && needleLine) {
+                    needleLine.style.opacity = pointerVisible ? '1' : '0';
+                    needleLine.style.stroke = pointerVisible ? ratioColor : '#6f63d9';
+
+                    if (isElementVisibleById('promptsGaugeNeedle')) {
+                        needleGroup.style.transform = `translate(100px, 100px) rotate(${rotationValue}deg)`;
+                        needleGroup.dataset.currentRotation = rotationValue;
+                        applyNeedleBounce(extremeSide);
+                        delete needleGroup.dataset.pendingRotation;
+                        delete needleGroup.dataset.bounceSide;
+                    } else {
+                        // Guardar rotación y rebote para cuando esté visible
+                        needleGroup.dataset.pendingRotation = rotationValue;
+                        needleGroup.dataset.bounceSide = extremeSide || '';
+                    }
+
+                    // Mostrar etiquetas MIN/MAX en extremos
+                    if (minLabel && maxLabel) {
+                        if (extremeSide === 'left') {
+                            minLabel.classList.add('visible');
+                            maxLabel.classList.remove('visible');
+                        } else if (extremeSide === 'right') {
+                            maxLabel.classList.add('visible');
+                            minLabel.classList.remove('visible');
+                        } else {
+                            minLabel.classList.remove('visible');
+                            maxLabel.classList.remove('visible');
+                        }
+                    }
                 }
             }
 
@@ -1874,6 +2030,7 @@
                 if (stats[model]) {
                     stats[model].count++;
                     stats[model].totalCost += prompt.cost;
+                   
                     stats[model].totalConsumed += prompt.consumed;
                 }
             });
@@ -1906,7 +2063,7 @@
                 return `
                     <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="${colors[model]}" rx="5"
                         onmouseover="showTooltip(event, '${model}: ${displayValue}')"
-                        onmouseout="hideTooltip()" style="cursor: pointer;" />
+                        onmouseout="hideTooltip()" />
                     <text x="${x + barWidth / 2}" y="${height - padding + 20}" text-anchor="middle" font-size="12" fill="#333" font-weight="bold">
                         ${model}
                     </text>
@@ -2883,7 +3040,7 @@
                 document.getElementById('currentUsage').focus();
 
                 const displayMsg = inputMode === 'consumed'
-                    ? `Prompt registrado (${modelType}): ${consumed.toFixed(2)}% consumido (${cost.toFixed(3)}€)`
+                    ? `Prompt registrado (${modelType}): ${consumed.toFixed(2)}% consumido (${cost.toFixed(3)}€)` 
                     : `Prompt registrado (${modelType}): ${consumed.toFixed(2)}% consumido = ${(100 - currentUsage).toFixed(2)}% restante (${cost.toFixed(3)}€)`;
 
                 showAlert(displayMsg, 'success');
@@ -3331,12 +3488,9 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
             // Refrescar solo la sección de recomendaciones
             updateRecommendations();
 
-            showAlert(
-                recommendationsEnabled
-                    ? '✅ Recomendaciones Ollama activadas'
-                    : '❌ Recomendaciones Ollama desactivadas',
-                'success'
-            );
+            showAlert(`
+                ${recommendationsEnabled ? '✅' : '❌'} Recomendaciones Ollama ${recommendationsEnabled ? 'activadas' : 'desactivadas'}
+            `, 'success');
         }
 
         // Manejar el toggle de auto-regeneración
@@ -3589,6 +3743,7 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
 
         // Recopilar estadísticas de la SESIÓN ACTUAL para enviar a Ollama
         // IMPORTANTE: Solo datos de la sesión actual (5h), no del día completo
+       
         function collectDailyStats() {
             // Solo usar prompts de la sesión actual
             const sessionPrompts = currentSessionPrompts;
@@ -3858,6 +4013,7 @@ Responde SOLO con la recomendación, sin explicaciones adicionales, sin asterisc
         // Inicializar la aplicación
         updateInputModeUI(); // Establecer el modo de entrada correcto al cargar
         initializeCustomTimeListeners(); // Inicializar listeners del tiempo personalizado
+        setupVisibilityObserver();
         updateAll();
 
         // Actualizar estadísticas cada minuto para que el tiempo restante baje automáticamente
