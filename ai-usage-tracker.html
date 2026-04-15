@@ -254,7 +254,27 @@
             line-height: 1.2 !important;
         }
 
+        input.time-input[type="time"] {
+            width: 140px !important;
+            padding: 8px 10px !important;
+            font-size: 1.3em !important;
+            font-weight: bold !important;
+            text-align: center !important;
+            border: 2px solid #667eea !important;
+            border-radius: 8px !important;
+            background: white !important;
+            color: #333 !important;
+            box-sizing: border-box !important;
+            line-height: 1.2 !important;
+        }
+
         input.time-input[type="number"]:focus {
+            outline: none !important;
+            border-color: #764ba2 !important;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15) !important;
+        }
+
+        input.time-input[type="time"]:focus {
             outline: none !important;
             border-color: #764ba2 !important;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15) !important;
@@ -1147,6 +1167,13 @@
             <div class="stat-card">
                 <h3>Fin de Sesión</h3>
                 <div class="stat-value" id="sessionEndTime">--:--</div>
+                <div class="time-editor">
+                    <div class="time-input-group">
+                        <input type="time" id="customEndTimeInput" class="time-input">
+                    </div>
+                    <button type="button" id="applyCustomEndTime" class="btn-apply-time">Aplicar</button>
+                    <button type="button" id="resetCustomEndTime" class="btn-reset-time" style="display: none;">Resetear</button>
+                </div>
                 <div class="stat-label">hora estimada</div>
             </div>
 
@@ -1268,9 +1295,8 @@
         </div>
 
         <!-- Sección de Recomendaciones Ollama (independiente) -->
-        <div class="recommendations-main-section" id="recommendationsMainSection">
+        <div class="recommendations-main-section" id="recommendationsMainSection" style="display: none;">
             <h2 style="color: #667eea; margin-bottom: 20px;">💡 Recomendaciones con IA</h2>
-            <div id="ollama-recommendations-container"></div>
         </div>
 
         <div class="history-section">
@@ -1465,8 +1491,8 @@
         let completedSessions = [];
         let dailyHistory = [];
         let inputMode = 'consumed';
-        let recommendationsEnabled = true;
-        let autoRegenerateEnabled = false; // Auto-regenerar recomendaciones al registrar prompt
+        let recommendationsEnabled = false;
+        let autoRegenerateEnabled = false;
         let ollamaRecommendation = '';
         let isGeneratingRecommendation = false;
         let customEndTime = null; // Hora de finalización personalizada (timestamp en ms, null = usar cálculo automático)
@@ -1488,9 +1514,9 @@
                 completedSessions = safeJSONParse(getStorageItem('completedSessions'), []);
                 dailyHistory = safeJSONParse(getStorageItem('dailyHistory'), []);
                 inputMode = getStorageItem('inputMode') || 'consumed';
-                recommendationsEnabled = getStorageItem('recommendationsEnabled') !== 'false';
-                autoRegenerateEnabled = getStorageItem('autoRegenerateEnabled') === 'true';
-                ollamaRecommendation = getStorageItem('ollamaRecommendation') || '';
+                recommendationsEnabled = false;
+                autoRegenerateEnabled = false;
+                ollamaRecommendation = '';
                 customEndTime = getStorageItem('customEndTime') ? parseInt(getStorageItem('customEndTime')) : null;
 
                 console.log('✓ Datos cargados:', {
@@ -3513,8 +3539,6 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
             const applyBtn = document.getElementById('applyCustomTime');
             const resetBtn = document.getElementById('resetCustomTime');
             const copyBtn = document.getElementById('copyCurrentTime');
-            const hoursInput = document.getElementById('customHours');
-            const minutesInput = document.getElementById('customMinutes');
 
             if (applyBtn) {
                 applyBtn.removeEventListener('click', applyCustomTime);
@@ -3533,6 +3557,7 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
 
             // Actualizar la UI si hay tiempo personalizado guardado
             updateCustomTimeInputs();
+            updateCustomEndTimeInput();
         }
 
         // Aplicar tiempo personalizado
@@ -3734,6 +3759,272 @@ ${quota.percentage > 80 ? '\n⚠️ RECOMENDACIÓN: Exporta datos y limpia histo
                 showAlert('⚠️ Error: ' + error.message, 'error');
             } finally {
                 // Re-habilitar botón
+                copyBtn.disabled = false;
+                copyBtn.style.opacity = '';
+            }
+        }
+
+        function initializeCustomEndTimeListeners() {
+            const applyBtn = document.getElementById('applyCustomEndTime');
+            const resetBtn = document.getElementById('resetCustomEndTime');
+            const timeInput = document.getElementById('customEndTimeInput');
+
+            if (applyBtn) {
+                applyBtn.removeEventListener('click', applyCustomEndTime);
+                applyBtn.addEventListener('click', applyCustomEndTime);
+            }
+
+            if (resetBtn) {
+                resetBtn.removeEventListener('click', resetCustomTime);
+                resetBtn.addEventListener('click', resetCustomTime);
+            }
+
+            if (timeInput) {
+                timeInput.removeEventListener('keydown', handleCustomEndTimeInputKeydown);
+                timeInput.addEventListener('keydown', handleCustomEndTimeInputKeydown);
+            }
+
+            updateCustomEndTimeInput();
+        }
+
+        function handleCustomEndTimeInputKeydown(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                applyCustomEndTime();
+            }
+        }
+
+        function toggleCustomTimeResetButtons(show) {
+            const durationResetBtn = document.getElementById('resetCustomTime');
+            const endTimeResetBtn = document.getElementById('resetCustomEndTime');
+
+            if (durationResetBtn) {
+                durationResetBtn.style.display = show ? 'inline-block' : 'none';
+            }
+
+            if (endTimeResetBtn) {
+                endTimeResetBtn.style.display = show ? 'inline-block' : 'none';
+            }
+        }
+
+        function saveCustomEndTime(timestamp) {
+            customEndTime = timestamp;
+            setStorageItem('customEndTime', customEndTime.toString());
+            toggleCustomTimeResetButtons(true);
+            updateTodayStats();
+            updateCustomTimeInputs();
+            updateCustomEndTimeInput();
+        }
+
+        function buildCustomEndTimeFromClock(clockValue) {
+            if (!clockValue || !clockValue.includes(':')) {
+                return null;
+            }
+
+            const [hoursStr, minutesStr] = clockValue.split(':');
+            const hours = parseInt(hoursStr, 10);
+            const minutes = parseInt(minutesStr, 10);
+
+            if (
+                Number.isNaN(hours) || Number.isNaN(minutes) ||
+                hours < 0 || hours > 23 || minutes < 0 || minutes > 59
+            ) {
+                return null;
+            }
+
+            const now = new Date();
+            const endTime = new Date(now);
+            endTime.setSeconds(0, 0);
+            endTime.setHours(hours, minutes, 0, 0);
+
+            if (endTime.getTime() <= now.getTime()) {
+                endTime.setDate(endTime.getDate() + 1);
+            }
+
+            return endTime.getTime();
+        }
+
+        function updateCustomEndTimeInput() {
+            const timeInput = document.getElementById('customEndTimeInput');
+            const resetBtn = document.getElementById('resetCustomEndTime');
+
+            if (!timeInput) {
+                return;
+            }
+
+            if (customEndTime !== null) {
+                const customEndTimeDate = new Date(customEndTime);
+                const hours = String(customEndTimeDate.getHours()).padStart(2, '0');
+                const minutes = String(customEndTimeDate.getMinutes()).padStart(2, '0');
+                timeInput.value = `${hours}:${minutes}`;
+
+                if (resetBtn) {
+                    resetBtn.style.display = 'inline-block';
+                }
+            } else {
+                timeInput.value = '';
+
+                if (resetBtn) {
+                    resetBtn.style.display = 'none';
+                }
+            }
+        }
+
+        function applyCustomEndTime() {
+            const timeInput = document.getElementById('customEndTimeInput');
+            const timestamp = buildCustomEndTimeFromClock(timeInput ? timeInput.value : '');
+
+            if (timestamp === null) {
+                showAlert('Introduce una hora valida', 'error');
+                return;
+            }
+
+            saveCustomEndTime(timestamp);
+
+            const endTime = new Date(timestamp);
+            const formattedTime = endTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            showAlert(`Fin de sesion aplicado: ${formattedTime}`, 'success');
+        }
+
+        function applyCustomTime() {
+            const hoursInput = document.getElementById('customHours');
+            const minutesInput = document.getElementById('customMinutes');
+            const hours = parseInt(hoursInput.value) || 0;
+            const minutes = parseInt(minutesInput.value) || 0;
+
+            if (hours === 0 && minutes === 0) {
+                showAlert('Introduce un tiempo valido (horas y/o minutos)', 'error');
+                return;
+            }
+
+            const now = new Date();
+            const totalMinutes = hours * 60 + minutes;
+            const endTime = new Date(now.getTime() + totalMinutes * 60 * 1000);
+
+            saveCustomEndTime(endTime.getTime());
+
+            showAlert(`Tiempo personalizado aplicado: ${hours}h ${minutes}m`, 'success');
+        }
+
+        function resetCustomTime() {
+            const hoursInput = document.getElementById('customHours');
+            const minutesInput = document.getElementById('customMinutes');
+            const endTimeInput = document.getElementById('customEndTimeInput');
+
+            customEndTime = null;
+            removeStorageItem('customEndTime');
+
+            if (hoursInput) hoursInput.value = '';
+            if (minutesInput) minutesInput.value = '';
+            if (endTimeInput) endTimeInput.value = '';
+
+            toggleCustomTimeResetButtons(false);
+            updateTodayStats();
+            updateCustomTimeInputs();
+            updateCustomEndTimeInput();
+
+            showAlert('Tiempo automatico restaurado', 'success');
+        }
+
+        function updateCustomTimeInputs() {
+            const hoursInput = document.getElementById('customHours');
+            const minutesInput = document.getElementById('customMinutes');
+            const resetBtn = document.getElementById('resetCustomTime');
+
+            if (customEndTime !== null) {
+                const now = new Date();
+                const remainingMs = customEndTime - now.getTime();
+
+                if (remainingMs > 0) {
+                    const totalMinutes = Math.floor(remainingMs / (60 * 1000));
+                    const hours = Math.floor(totalMinutes / 60);
+                    const minutes = totalMinutes % 60;
+
+                    if (hoursInput) hoursInput.value = hours;
+                    if (minutesInput) minutesInput.value = minutes;
+                    if (resetBtn) resetBtn.style.display = 'inline-block';
+                } else {
+                    if (hoursInput) hoursInput.value = 0;
+                    if (minutesInput) minutesInput.value = 0;
+                    if (resetBtn) resetBtn.style.display = 'inline-block';
+                }
+            } else {
+                if (hoursInput) hoursInput.value = '';
+                if (minutesInput) minutesInput.value = '';
+                if (resetBtn) resetBtn.style.display = 'none';
+            }
+        }
+
+        async function copyCurrentTimeToInputs() {
+            console.log('[Copy Time] Iniciando extraccion de tiempo desde Claude.ai...');
+
+            const hoursInput = document.getElementById('customHours');
+            const minutesInput = document.getElementById('customMinutes');
+            const copyBtn = document.getElementById('copyCurrentTime');
+
+            if (!hoursInput || !minutesInput || !copyBtn) {
+                console.error('[Copy Time] Inputs o boton no encontrados');
+                return;
+            }
+
+            if (copyBtn.disabled) {
+                console.warn('[Copy Time] Ya hay una extraccion en progreso');
+                return;
+            }
+
+            copyBtn.disabled = true;
+            copyBtn.style.opacity = '0.6';
+
+            try {
+                if (!window.EXTENSION_CONFIG || !window.EXTENSION_CONFIG.ID) {
+                    throw new Error('Extension no configurada');
+                }
+
+                const response = await requestUsageFromExtension();
+
+                if (!response || !response.success) {
+                    throw new Error(response?.error || 'No se pudo obtener el tiempo desde la extension');
+                }
+
+                if (!response.resetTime) {
+                    console.warn('[Copy Time] La respuesta no incluye resetTime:', response);
+                    return;
+                }
+
+                const { hours, minutes } = response.resetTime;
+
+                if (typeof hours !== 'number' || typeof minutes !== 'number') {
+                    showAlert('Tiempo invalido recibido', 'error');
+                    return;
+                }
+
+                console.log('[Copy Time] Tiempo extraido:', hours, 'h', minutes, 'min');
+
+                hoursInput.value = hours;
+                minutesInput.value = minutes;
+
+                hoursInput.style.background = 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)';
+                minutesInput.style.background = 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)';
+
+                setTimeout(() => {
+                    hoursInput.style.background = '';
+                    minutesInput.style.background = '';
+                }, 800);
+
+                const now = new Date();
+                const totalMinutes = hours * 60 + minutes;
+                const endTime = new Date(now.getTime() + totalMinutes * 60 * 1000);
+
+                saveCustomEndTime(endTime.getTime());
+
+                showAlert(`Tiempo extraido y aplicado: ${hours}h ${minutes}m`, 'success');
+
+                console.log(`[Copy Time] Tiempo aplicado automaticamente: ${hours}h ${minutes}m (fin: ${new Date(customEndTime).toLocaleTimeString()})`);
+
+            } catch (error) {
+                console.error('[Copy Time] Error general:', error);
+                showAlert('Error: ' + error.message, 'error');
+            } finally {
                 copyBtn.disabled = false;
                 copyBtn.style.opacity = '';
             }
@@ -4000,6 +4291,45 @@ Responde SOLO con la recomendación, sin explicaciones adicionales, sin asterisc
             initializeRecommendationsListeners();
         }
 
+        function initializeRecommendationsListeners() {}
+
+        function handleRecommendationToggle() {
+            recommendationsEnabled = false;
+        }
+
+        function handleAutoRegenerateToggle() {
+            autoRegenerateEnabled = false;
+        }
+
+        function saveOllamaConfig() {
+            recommendationsEnabled = false;
+            autoRegenerateEnabled = false;
+            ollamaRecommendation = '';
+
+            if (storageAvailable) {
+                removeStorageItem('recommendationsEnabled');
+                removeStorageItem('autoRegenerateEnabled');
+                removeStorageItem('ollamaRecommendation');
+            }
+
+            return true;
+        }
+
+        async function generateOllamaRecommendation() {
+            recommendationsEnabled = false;
+            autoRegenerateEnabled = false;
+            isGeneratingRecommendation = false;
+            ollamaRecommendation = '';
+            return null;
+        }
+
+        function updateRecommendations() {
+            const section = document.getElementById('recommendationsMainSection');
+            if (section) {
+                section.style.display = 'none';
+            }
+        }
+
         function updateAll() {
             updateDashboard();
             updateHistoryTable();
@@ -4008,11 +4338,14 @@ Responde SOLO con la recomendación, sin explicaciones adicionales, sin asterisc
             updateEditDatesSection();
             updateRecommendations();
             updateCustomTimeInputs();
+            updateCustomEndTimeInput();
         }
 
         // Inicializar la aplicación
         updateInputModeUI(); // Establecer el modo de entrada correcto al cargar
         initializeCustomTimeListeners(); // Inicializar listeners del tiempo personalizado
+        initializeCustomEndTimeListeners(); // Inicializar listeners de la hora final personalizada
+        saveOllamaConfig();
         setupVisibilityObserver();
         updateAll();
 
@@ -4020,6 +4353,7 @@ Responde SOLO con la recomendación, sin explicaciones adicionales, sin asterisc
         setInterval(() => {
             updateTodayStats();
             updateCustomTimeInputs();
+            updateCustomEndTimeInput();
         }, 60000); // 60000ms = 1 minuto
     </script>
 </body>

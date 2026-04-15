@@ -17,7 +17,7 @@ set OLLAMA_ORIGINS=*
 
 REM Iniciar Ollama con CORS habilitado
 echo [3/5] Iniciando Ollama con CORS habilitado...
-start /B ollama serve
+echo start /B ollama serve
 timeout /t 3 /nobreak >nul
 
 REM Iniciar servidor web Python
